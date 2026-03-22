@@ -20,7 +20,11 @@ source .venv/bin/activate
 
 echo "Installing core dependencies..."
 uv pip install torch transformers datasets trl peft accelerate wandb evaluate \
-    scikit-learn pandas jupyter pyyaml bitsandbytes
+    scikit-learn pandas jupyter pyyaml
+
+# bitsandbytes (QLoRA) is CUDA-only — skip on Apple Silicon M4 (MPS)
+# If running on a CUDA GPU, uncomment:
+# uv pip install bitsandbytes
 
 echo "Installing project in editable mode..."
 uv pip install -e .

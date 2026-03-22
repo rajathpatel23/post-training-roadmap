@@ -1,6 +1,13 @@
 # Base config — inherited by all project configs
+# Tuned for Apple Silicon M4 (MPS backend)
+
 model:
   primary: "Qwen/Qwen2.5-0.5B-Instruct"
+  # M4 model options by memory headroom:
+  #   ~1GB  fp16: Qwen/Qwen2.5-0.5B-Instruct          (current — safe on any M4)
+  #   ~3GB  fp16: Qwen/Qwen2.5-1.5B-Instruct           (fine on M4 Pro 24GB+)
+  #   ~3GB  fp16: HuggingFaceTB/SmolLM2-1.7B-Instruct  (alternative)
+  #   ~14GB fp16: Qwen/Qwen2.5-7B-Instruct             (M4 Pro 24GB, tight)
   backup: "HuggingFaceTB/SmolLM2-360M-Instruct"
   use_backup: false
 
@@ -10,9 +17,9 @@ training:
   warmup_ratio: 0.05
   weight_decay: 0.01
   lr_scheduler: "cosine"
-  fp16: false
-  bf16: true                   # prefer bf16 on modern GPUs
-  dataloader_num_workers: 2
+  fp16: true                   # MPS supports fp16; bf16 support is unreliable on MPS
+  bf16: false
+  dataloader_num_workers: 0    # MPS requires 0 — multiprocessing causes issues
   seed: 42
 
 lora:
@@ -23,6 +30,8 @@ lora:
   target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
   bias: "none"
   task_type: "CAUSAL_LM"
+  # Note: QLoRA (bitsandbytes 4-bit) is NOT supported on MPS.
+  # Use regular LoRA (fp16) — still trains fast on M4.
 
 eval:
   eval_steps: 100
