@@ -1,0 +1,40 @@
+# Base config — inherited by all project configs
+model:
+  primary: "Qwen/Qwen2.5-0.5B-Instruct"
+  backup: "HuggingFaceTB/SmolLM2-360M-Instruct"
+  use_backup: false
+
+training:
+  max_length: 512
+  grad_accumulation_steps: 4
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  lr_scheduler: "cosine"
+  fp16: false
+  bf16: true                   # prefer bf16 on modern GPUs
+  dataloader_num_workers: 2
+  seed: 42
+
+lora:
+  enabled: true
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+eval:
+  eval_steps: 100
+  save_steps: 100
+  save_total_limit: 2
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  generation_max_new_tokens: 256
+  generation_temperature: 0.0       # greedy during eval — fixed for reproducibility
+  generation_do_sample: false
+  num_sample_generations: 20        # logged to wandb each eval
+
+logging:
+  report_to: "wandb"
+  logging_steps: 10

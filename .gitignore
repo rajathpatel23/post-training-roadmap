@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+outputs/
+*.ckpt
+*.pt
+*.bin
+*.safetensors
+data/raw/
+data/processed/
+data/eval/
+.DS_Store
+*.egg-info/

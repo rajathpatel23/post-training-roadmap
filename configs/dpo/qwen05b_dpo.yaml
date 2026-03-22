@@ -1,0 +1,25 @@
+defaults:
+  - base
+
+# Project 2: DPO — pairwise preference on Ultrafeedback or HH subset
+project: "project2_dpo"
+run_name: "qwen05b-dpo-v1"
+
+model:
+  primary: "Qwen/Qwen2.5-0.5B-Instruct"  # or point to SFT checkpoint
+
+training:
+  max_length: 512
+  learning_rate: 5.0e-5                   # DPO typically needs lower LR than SFT
+  per_device_train_batch_size: 2
+  num_train_epochs: 1
+  output_dir: "outputs/project2_dpo"
+
+dpo:
+  beta: 0.1                               # KL penalty strength
+  loss_type: "sigmoid"                    # standard DPO loss
+
+data:
+  train_path: "data/processed/pref_train.jsonl"
+  eval_path:  "data/eval/pref_eval.jsonl"
+  max_pairs: 20000                        # cap — inspect 50 manually before training
