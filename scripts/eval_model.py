@@ -22,9 +22,161 @@ Run:
 import argparse
 
 
+import os
+
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from src.common.config import ExperimentConfig
+from src.common.io import read_jsonl, write_jsonl
+from src.common.logging import init_run, log_metrics, log_samples, finish_run
+from src.evals.exact_match import (
+    avg_response_length,
+    exact_field_presence_rate,
+    format_validity_rate,
+)
+from src.evals.qualitative_dump import bucket_failures
+
 
 def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> None:
-    raise NotImplementedError("implement me")
+    cfg = ExperimentConfig.from_yaml(config_path)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Load prompts (fixed order, no shuffling).
+    records = read_jsonl(eval_path)
+    prompts = [r["prompt"] for r in records if "prompt" in r]
+    if not prompts:
+        raise ValueError(f"No `prompt` fields found in {eval_path}")
+
+    checkpoint_name = os.path.basename(os.path.normpath(checkpoint))
+
+    # Device: default to Apple Silicon (MPS) if available.
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+
+    tokenizer = AutoTokenizer.from_pretrained(cfg.model.primary)
+    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    def generate_with(model_path: str) -> list[str]:
+        model = AutoModelForCausalLM.from_pretrained(model_path)
+        model.eval()
+        model.to(device)
+
+        outs: list[str] = []
+        with torch.no_grad():
+            for prompt in prompts:
+                messages = [{"role": "user", "content": prompt}]
+                inputs = tokenizer.apply_chat_template(
+                    messages,
+                    return_tensors="pt",
+                    add_generation_prompt=True,
+                )
+                inputs = inputs.to(device)
+
+                gen_out = model.generate(
+                    **inputs,
+                    eos_token_id=tokenizer.eos_token_id,
+                    max_new_tokens=cfg.eval.generation_max_new_tokens,
+                    do_sample=cfg.eval.generation_do_sample,
+                    temperature=cfg.eval.generation_temperature,
+                )
+                outs.append(tokenizer.decode(gen_out[0], skip_special_tokens=True))
+
+        del model
+        try:
+            torch.mps.empty_cache()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        return outs
+
+    base_outputs = generate_with(cfg.model.primary)
+    trained_outputs = generate_with(checkpoint)
+
+    # Metrics
+    metrics: dict[str, float] = {
+        "eval/format_validity_rate": float(format_validity_rate(trained_outputs)),
+        "eval/avg_response_length": float(avg_response_length(trained_outputs)),
+    }
+    if cfg.eval.required_fields:
+        metrics["eval/exact_field_presence_rate"] = float(
+            exact_field_presence_rate(trained_outputs, cfg.eval.required_fields)
+        )
+
+    # Optional task success if the dataset includes ground_truth fields.
+    if all("ground_truth" in r for r in records):
+        ground_truths = [str(r["ground_truth"]) for r in records]
+
+        def _verifier_exact(gen: str, gt: str) -> float:
+            return 1.0 if gen.strip() == gt.strip() else 0.0
+
+        success = sum(_verifier_exact(g, gt) for g, gt in zip(trained_outputs, ground_truths)) / len(ground_truths)
+        metrics["eval/task_success_rate_exact"] = float(success)
+
+    # Sample side-by-side (qualitative + failure buckets).
+    n_samples = min(cfg.eval.num_sample_generations, len(prompts))
+
+    def _is_json_valid(s: str) -> bool:
+        return format_validity_rate([s]) > 0.0
+
+    base_valid = [_is_json_valid(o) for o in base_outputs[:n_samples]]
+    trained_valid = [_is_json_valid(o) for o in trained_outputs[:n_samples]]
+
+    failure_labels: list[str] = []
+    for bv, tv in zip(base_valid, trained_valid, strict=True):
+        if bv and tv:
+            failure_labels.append("both_valid_json")
+        elif bv and not tv:
+            failure_labels.append("base_valid_trained_invalid_json")
+        elif not bv and tv:
+            failure_labels.append("base_invalid_trained_valid_json")
+        else:
+            failure_labels.append("both_invalid_json")
+
+    buckets = bucket_failures(generations=trained_outputs[:n_samples], labels=failure_labels)
+
+    samples = []
+    for i in range(n_samples):
+        samples.append(
+            {
+                "prompt": prompts[i],
+                "base_output": base_outputs[i],
+                "trained_output": trained_outputs[i],
+            }
+        )
+
+    # Write artifacts (reports/ by convention).
+    metrics_path = os.path.join(output_dir, f"metrics_{checkpoint_name}.json")
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        import json as _json
+
+        _json.dump(metrics, f, indent=2, ensure_ascii=False)
+
+    samples_path = os.path.join(output_dir, f"samples_{checkpoint_name}.jsonl")
+    write_jsonl(samples, samples_path)
+
+    buckets_path = os.path.join(output_dir, f"failure_buckets_{checkpoint_name}.json")
+    with open(buckets_path, "w", encoding="utf-8") as f:
+        import json as _json
+
+        _json.dump(buckets, f, indent=2, ensure_ascii=False)
+
+    # W&B logging
+    run = init_run(
+        {
+            "project": cfg.project,
+            "run_name": cfg.run_name,
+            "model_primary": cfg.model.primary,
+            "checkpoint": checkpoint,
+            "eval_path": eval_path,
+        },
+        output_dir=output_dir,
+        project=os.environ.get("WANDB_PROJECT", cfg.project),
+        run_name=f"{cfg.run_name}-eval-{checkpoint_name}",
+    )
+
+    log_metrics(run, metrics, step=0)
+    log_samples(run, samples, step=0, table_name="eval_samples")
+    finish_run(run)
 
 
 if __name__ == "__main__":
