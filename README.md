@@ -12,6 +12,28 @@ The intent is to reuse the same config + logging conventions across all three pr
 - Primary model: `Qwen/Qwen2.5-0.5B-Instruct`
 - Backup: `HuggingFaceTB/SmolLM2-360M-Instruct`
 
+## Model Options (M4 24GB, fp16 + LoRA)
+
+Memory budget rules of thumb:
+- **SFT / GRPO training**: up to 3B comfortable, 7B tight (risky, avoid for training)
+- **DPO training**: needs two model copies simultaneously — stay at 1.5B or below
+- **Inference only**: up to 7B comfortably (~14GB fp16)
+
+| Model | Size | fp16 RAM | Use |
+|---|---|---|---|
+| `Qwen/Qwen2.5-0.5B-Instruct` | 0.5B | ~1GB | Fast iteration, debugging pipelines |
+| `Qwen/Qwen2.5-1.5B-Instruct` | 1.5B | ~3GB | Sweet spot — good quality, fits DPO |
+| `Qwen/Qwen2.5-3B-Instruct` | 3B | ~6GB | Best quality for SFT/GRPO on this machine |
+| `meta-llama/Llama-3.2-1B-Instruct` | 1B | ~2GB | Good DPO model (2 copies = ~4GB) |
+| `meta-llama/Llama-3.2-3B-Instruct` | 3B | ~6GB | Stronger reasoning than Qwen 3B |
+| `google/gemma-3-1b-it` | 1B | ~2GB | Recent, strong for its size |
+| `Qwen/Qwen2.5-7B-Instruct` | 7B | ~14GB | **Inference only** — too tight for training |
+| `HuggingFaceTB/SmolLM2-360M-Instruct` | 360M | <1GB | Backup if 0.5B has issues |
+
+> Note: `Qwen2.5-7B-Instruct` is listed in `configs/base.yaml` as a size option but is not safe for LoRA training at 24GB — use it for inference runs only.
+
+**Suggested progression**: start with 0.5B to debug data pipelines (fast), switch to 1.5B or 3B once the loop is working.
+
 ## Repo Layout (shared across projects)
 
 Top-level:
@@ -39,7 +61,43 @@ Shared code:
 
 ## Datasets
 
-Expected JSONL schemas (repo convention):
+### Dataset selection philosophy
+
+> **Default principle: cheap and debuggable first.**
+> Start with the smallest model that exposes the learning objective — `Qwen2.5-0.5B-Instruct` or `SmolLM2-360M/1.7B`. Use a narrow self-curated dataset or a small subset of an open dataset, not the full thing. Pick datasets where the training objective and the data signal have a clear, articulable connection — write down *why* each dataset matches the training objective before you start.
+
+Concretely:
+- **SFT**: start with a narrow self-curated dataset or a small subset of an open instruction dataset
+- **DPO**: use a small pairwise preference set (≤5K pairs) and manually inspect 50 before training
+- **RL/GRPO**: use a verifiable task dataset where the reward checker is trivial (exact number match, exact string match, valid JSON check)
+
+### Recommended source datasets (by project)
+
+**Project 1 — SFT (structured JSON output)**
+
+| Dataset | HF ID | Notes |
+|---|---|---|
+| NER → JSON (recommended) | `conll2003` | Define output as `{"entities": [{"text": "...", "type": "PER"}]}`. Small (~14K train), verifiable, forces you to write the schema. |
+| Function calling | `glaiveai/glaive-function-calling-v2` | Already structured as JSON, ~112K examples |
+| Hermes function calling | `NousResearch/hermes-function-calling-v1` | Cleaner quality, ChatML format (matches Qwen template exactly) |
+
+**Project 2 — DPO (preference learning)**
+
+| Dataset | HF ID | Notes |
+|---|---|---|
+| UltraFeedback (recommended) | `HuggingFaceH4/ultrafeedback_binarized` | 64K chosen/rejected pairs, highest quality. Use a 5K subset to start. |
+| Anthropic HH | `Anthropic/hh-rlhf` | Helpfulness + harmlessness pairs. Older but good baseline. |
+| DPO Mix | `argilla/dpo-mix-7k` | 7K curated pairs, diverse topics. Good for smaller runs. |
+
+**Project 3 — GRPO (RL with verifiable reward)**
+
+| Dataset | HF ID | Notes |
+|---|---|---|
+| GSM8K (recommended) | `openai/gsm8k` | 7.5K math word problems, numeric answers. Verifier is ~5 lines: extract last number, compare. Exact match reward. |
+| ARC-Easy | `allenai/ai2_arc` (easy split) | Multiple choice (A/B/C/D). Trivial verifier. Good fallback. |
+| MATH | `lighteval/MATH` | Harder (AMC/AIME level). Use as stretch goal after GSM8K works. |
+
+### Expected JSONL schemas (repo convention):
 - `data/processed/sft_train.jsonl`, `data/eval/sft_eval.jsonl`
   - SFT eval file currently contains `{"prompt": "..."}`
   - SFT train file is expected to contain `{"prompt": "...", "response": "..."}`
