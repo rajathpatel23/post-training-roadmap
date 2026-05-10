@@ -15,6 +15,16 @@ training:
   num_train_epochs: 2
   output_dir: "outputs/project1_sft"
 
+eval:
+  required_fields: ["entities"]
+
 data:
   train_path: "data/processed/sft_train.jsonl"
   eval_path:  "data/eval/sft_eval.jsonl"     # fixed from day 1, never shuffled
+
+# Project 1 data prep (scripts/prepare_sft_data.py)
+sft_data:
+  hf_split: "train"          # CoNLL official train split only (no test leakage)
+  train_fraction: 0.8
+  seed: 42
+  # max_examples: 2000      # optional cap for fast iteration

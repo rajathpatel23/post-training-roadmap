@@ -13,3 +13,5 @@ data/processed/
 data/eval/
 .DS_Store
 *.egg-info/
+*.env.example
+*.env

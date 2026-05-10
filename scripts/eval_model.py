@@ -1,15 +1,14 @@
 """
 Run evaluation on a checkpoint against the fixed eval set.
 
-YOUR JOB: implement the body of this script.
+Scores **assistant completions only** (tokens after the chat prompt), so JSON
+metrics are not polluted by system/user prompt text.
 
 Output (write to reports/ and log to W&B):
-  - checkpoint name
-  - dataset split
+  - checkpoint name, eval path, generation settings
   - exact metric scores (format validity, task success, etc.)
-  - 20 sampled generations (base model vs. trained)
-  - grouped failure categories
-  - generation config used
+  - sampled generations (base vs trained)
+  - grouped failure buckets (JSON validity comparison)
 
 Run:
     python scripts/eval_model.py \
@@ -28,12 +27,14 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.common.config import ExperimentConfig
+from src.common.generation import decode_assistant_completion, resolve_lm_device
 from src.common.io import read_jsonl, write_jsonl
 from src.common.logging import init_run, log_metrics, log_samples, finish_run
 from src.evals.exact_match import (
     avg_response_length,
     exact_field_presence_rate,
     format_validity_rate,
+    is_parseable_json,
 )
 from src.evals.qualitative_dump import bucket_failures
 
@@ -50,8 +51,7 @@ def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> 
 
     checkpoint_name = os.path.basename(os.path.normpath(checkpoint))
 
-    # Device: default to Apple Silicon (MPS) if available.
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = resolve_lm_device()
 
     tokenizer = AutoTokenizer.from_pretrained(cfg.model.primary)
     if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
@@ -73,6 +73,7 @@ def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> 
                 )
                 inputs = inputs.to(device)
 
+                input_ids = inputs["input_ids"]
                 gen_out = model.generate(
                     **inputs,
                     eos_token_id=tokenizer.eos_token_id,
@@ -80,7 +81,9 @@ def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> 
                     do_sample=cfg.eval.generation_do_sample,
                     temperature=cfg.eval.generation_temperature,
                 )
-                outs.append(tokenizer.decode(gen_out[0], skip_special_tokens=True))
+                outs.append(
+                    decode_assistant_completion(tokenizer, input_ids, gen_out),
+                )
 
         del model
         try:
@@ -116,7 +119,7 @@ def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> 
     n_samples = min(cfg.eval.num_sample_generations, len(prompts))
 
     def _is_json_valid(s: str) -> bool:
-        return format_validity_rate([s]) > 0.0
+        return is_parseable_json(s)
 
     base_valid = [_is_json_valid(o) for o in base_outputs[:n_samples]]
     trained_valid = [_is_json_valid(o) for o in trained_outputs[:n_samples]]
@@ -146,10 +149,24 @@ def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> 
 
     # Write artifacts (reports/ by convention).
     metrics_path = os.path.join(output_dir, f"metrics_{checkpoint_name}.json")
+    metrics_payload = {
+        "checkpoint": checkpoint_name,
+        "eval_path": eval_path,
+        "base_model": cfg.model.primary,
+        "device": device,
+        "metrics": metrics,
+        "eval_config": {
+            "generation_max_new_tokens": cfg.eval.generation_max_new_tokens,
+            "generation_do_sample": cfg.eval.generation_do_sample,
+            "generation_temperature": cfg.eval.generation_temperature,
+            "num_sample_generations": cfg.eval.num_sample_generations,
+            "required_fields": cfg.eval.required_fields,
+        },
+    }
     with open(metrics_path, "w", encoding="utf-8") as f:
         import json as _json
 
-        _json.dump(metrics, f, indent=2, ensure_ascii=False)
+        _json.dump(metrics_payload, f, indent=2, ensure_ascii=False)
 
     samples_path = os.path.join(output_dir, f"samples_{checkpoint_name}.jsonl")
     write_jsonl(samples, samples_path)

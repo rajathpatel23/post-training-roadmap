@@ -1,10 +1,10 @@
 """
 Run greedy decoding on N prompts and save outputs to file.
 
-Use this for Day 2: load base model, run inference on 20 prompts, save to file.
-Also useful for qualitative comparison between checkpoints.
+Each line stores the **assistant completion only** (decoded new tokens), not the
+full prompt, so downstream JSON metrics match what `eval_model.py` scores.
 
-YOUR JOB: implement the body of this script.
+Use for Day 2 baselines and qualitative checkpoint comparison.
 
 Run:
     # Day 2 baseline
@@ -22,15 +22,14 @@ Run:
         --output reports/project1_samples.jsonl
 """
 
-from typing import Any
-
-
 import argparse
 import json
 from pathlib import Path
 
+import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from src.common.generation import decode_assistant_completion, resolve_lm_device
 from src.common.logging import init_run, log_samples, finish_run
 
 def main(
@@ -61,38 +60,40 @@ def main(
             entity=wandb_entity,
         )
 
+    device = resolve_lm_device()
     tokenizer = AutoTokenizer.from_pretrained(model_path)
+    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+        tokenizer.pad_token = tokenizer.eos_token
+
     model = AutoModelForCausalLM.from_pretrained(model_path)
     model.eval()
-    model.to("mps")
+    model.to(device)
 
     with open(prompts_path, "r") as f:
         prompts = [
             json.loads(line)["prompt"] for line in f if line.strip()
         ][:n]
 
-    outputs = []
-    for prompt in prompts:
-        messages = [{"role": "user", "content": prompt}]
-        inputs = tokenizer.apply_chat_template(
-            messages,
-            return_tensors="pt",
-            add_generation_prompt=True,  # add "<|im_start|>assistant\n" so model starts generating
-        )
-        inputs = inputs.to("mps")
-        output = model.generate(
-            **inputs,
-            eos_token_id=tokenizer.eos_token_id,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            temperature=0.0,
-        )
-        outputs.append(output[0])
-
-    records = [
-        {"prompt": p, "output": tokenizer.decode(o, skip_special_tokens=True)}
-        for p, o in zip(prompts, outputs)
-    ]
+    records: list[dict[str, str]] = []
+    with torch.no_grad():
+        for prompt in prompts:
+            messages = [{"role": "user", "content": prompt}]
+            inputs = tokenizer.apply_chat_template(
+                messages,
+                return_tensors="pt",
+                add_generation_prompt=True,
+            )
+            inputs = inputs.to(device)
+            input_ids = inputs["input_ids"]
+            output = model.generate(
+                **inputs,
+                eos_token_id=tokenizer.eos_token_id,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                temperature=0.0,
+            )
+            text = decode_assistant_completion(tokenizer, input_ids, output)
+            records.append({"prompt": prompt, "output": text})
 
     with open(output_path, "w") as f:
         if pretty:

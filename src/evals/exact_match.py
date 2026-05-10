@@ -52,6 +52,12 @@ def _try_parse_json(text: str) -> Optional[Any]:
         return None
 
 
+def is_parseable_json(text: str) -> bool:
+    """True if `text` contains a JSON object/array substring that parses."""
+
+    return _try_parse_json(text) is not None
+
+
 def format_validity_rate(generations: List[str]) -> float:
     """Fraction of generations that contain a parseable JSON object/array."""
 
@@ -59,7 +65,7 @@ def format_validity_rate(generations: List[str]) -> float:
         return 0.0
     valid = 0
     for g in generations:
-        if _try_parse_json(g) is not None:
+        if is_parseable_json(g):
             valid += 1
     return valid / len(generations)
 

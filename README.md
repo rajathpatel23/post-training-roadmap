@@ -99,8 +99,8 @@ Concretely:
 
 ### Expected JSONL schemas (repo convention):
 - `data/processed/sft_train.jsonl`, `data/eval/sft_eval.jsonl`
-  - SFT eval file currently contains `{"prompt": "..."}`
-  - SFT train file is expected to contain `{"prompt": "...", "response": "..."}`
+  - SFT train: `{"prompt": "...", "response": "..."}` (see `scripts/prepare_sft_data.py` for Project 1)
+  - SFT eval: `{"prompt": "...", "ground_truth": "..."}` — canonical JSON string for exact-match eval (`eval_model.py`)
 - `data/processed/pref_train.jsonl`, `data/eval/pref_eval.jsonl`
   - preference pairs: `{"prompt": <messages>, "chosen": <messages>, "rejected": <messages>}`
 - `data/processed/rl_train.jsonl`, `data/eval/rl_eval.jsonl`
