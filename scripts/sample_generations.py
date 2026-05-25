@@ -1,5 +1,5 @@
 """
-Run greedy decoding on N prompts and save outputs to file.
+Run fixed-parameter decoding on N prompts and save outputs to file.
 
 Each line stores the **assistant completion only** (decoded new tokens), not the
 full prompt, so downstream JSON metrics match what `eval_model.py` scores.
@@ -9,14 +9,16 @@ Use for Day 2 baselines and qualitative checkpoint comparison.
 Run:
     # Day 2 baseline
     python scripts/sample_generations.py \
-        --model Qwen/Qwen2.5-0.5B-Instruct \
+        --config configs/sft/qwen05b_structured.yaml \
         --prompts data/eval/sft_eval.jsonl \
         --n 20 \
-        --output reports/baseline_samples.jsonl
+        --output reports/baseline_samples.jsonl \
+        --metrics_output reports/baseline_metrics.json
 
     # After training
     python scripts/sample_generations.py \
         --model outputs/project1_sft/checkpoint-best \
+        --config configs/sft/qwen05b_structured.yaml \
         --prompts data/eval/sft_eval.jsonl \
         --n 20 \
         --output reports/project1_samples.jsonl
@@ -29,22 +31,54 @@ from pathlib import Path
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from src.common.generation import decode_assistant_completion, resolve_lm_device
+from src.common.config import ExperimentConfig
+from src.common.generation import (
+    build_generation_config,
+    decode_assistant_completion,
+    resolve_lm_device,
+)
+from src.common.io import read_jsonl, write_jsonl
 from src.common.logging import init_run, log_samples, finish_run
+from src.evals.exact_match import (
+    avg_response_length,
+    entity_micro_prf1,
+    exact_field_presence_rate,
+    format_validity_rate,
+    json_structural_match_rate,
+)
+
 
 def main(
-    model_path: str,
+    model_path: str | None,
     prompts_path: str,
     n: int,
     output_path: str,
     pretty: bool = False,
     *,
-    max_new_tokens: int = 100,
+    config_path: str | None = None,
+    max_new_tokens: int | None = None,
+    do_sample: bool | None = None,
+    temperature: float | None = None,
+    metrics_output_path: str | None = None,
     wandb_project: str | None = None,
     wandb_entity: str | None = None,
     wandb_run_name: str | None = None,
     log_table_name: str = "sample_generations",
 ) -> None:
+    cfg = ExperimentConfig.from_yaml(config_path) if config_path else None
+    if model_path is None:
+        if cfg is None:
+            raise ValueError("Either --model or --config must be provided")
+        model_path = cfg.model.primary
+
+    if max_new_tokens is None:
+        max_new_tokens = cfg.eval.generation_max_new_tokens if cfg else 256
+    if do_sample is None:
+        do_sample = cfg.eval.generation_do_sample if cfg else False
+    if temperature is None:
+        temperature = cfg.eval.generation_temperature if cfg else 0.0
+    required_fields = cfg.eval.required_fields if cfg else None
+
     run = None
     if wandb_project:
         run = init_run(
@@ -53,6 +87,8 @@ def main(
                 "prompts_path": prompts_path,
                 "n": n,
                 "max_new_tokens": max_new_tokens,
+                "do_sample": do_sample,
+                "temperature": temperature,
             },
             output_dir=str(Path(output_path).parent),
             project=wandb_project,
@@ -69,10 +105,8 @@ def main(
     model.eval()
     model.to(device)
 
-    with open(prompts_path, "r") as f:
-        prompts = [
-            json.loads(line)["prompt"] for line in f if line.strip()
-        ][:n]
+    prompt_records = read_jsonl(prompts_path)[:n]
+    prompts = [record["prompt"] for record in prompt_records]
 
     records: list[dict[str, str]] = []
     with torch.no_grad():
@@ -81,26 +115,61 @@ def main(
             inputs = tokenizer.apply_chat_template(
                 messages,
                 return_tensors="pt",
+                return_dict=True,
                 add_generation_prompt=True,
             )
             inputs = inputs.to(device)
             input_ids = inputs["input_ids"]
-            output = model.generate(
-                **inputs,
-                eos_token_id=tokenizer.eos_token_id,
+            gen_cfg = build_generation_config(
                 max_new_tokens=max_new_tokens,
-                do_sample=False,
-                temperature=0.0,
+                do_sample=do_sample,
+                temperature=temperature,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id,
             )
+            output = model.generate(**inputs, generation_config=gen_cfg)
             text = decode_assistant_completion(tokenizer, input_ids, output)
             records.append({"prompt": prompt, "output": text})
 
-    with open(output_path, "w") as f:
-        if pretty:
+    if pretty:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(records, f, indent=2)
-        else:
-            for r in records:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    else:
+        write_jsonl(records, output_path)
+
+    outputs = [record["output"] for record in records]
+    metrics: dict[str, float] = {
+        "format_validity_rate": float(format_validity_rate(outputs)),
+        "avg_response_length": float(avg_response_length(outputs)),
+    }
+    if required_fields:
+        metrics["exact_field_presence_rate"] = float(exact_field_presence_rate(outputs, required_fields))
+
+    ground_truths = [record["ground_truth"] for record in prompt_records if "ground_truth" in record]
+    if len(ground_truths) == len(outputs):
+        metrics["task_success_rate"] = float(json_structural_match_rate(outputs, ground_truths))
+        ep, er, ef1 = entity_micro_prf1(outputs, ground_truths)
+        metrics["entity_precision"] = ep
+        metrics["entity_recall"] = er
+        metrics["entity_f1"] = ef1
+
+    if metrics_output_path:
+        metrics_payload = {
+            "model": model_path,
+            "prompts_path": prompts_path,
+            "output_path": output_path,
+            "num_prompts": len(records),
+            "generation_params": {
+                "max_new_tokens": max_new_tokens,
+                "do_sample": do_sample,
+                "temperature": temperature,
+            },
+            "required_fields": required_fields or [],
+            "metrics": metrics,
+        }
+        Path(metrics_output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(metrics_output_path, "w", encoding="utf-8") as f:
+            json.dump(metrics_payload, f, indent=2, ensure_ascii=False)
 
     if run is not None:
         # W&B table columns: prompt / base_output / trained_output.
@@ -112,12 +181,16 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--model", default=None)
+    parser.add_argument("--config", default=None)
     parser.add_argument("--prompts", required=True)
     parser.add_argument("--n", type=int, default=20)
     parser.add_argument("--output", required=True)
     parser.add_argument("--pretty", action="store_true", help="Write indented JSON for human readability")
-    parser.add_argument("--max_new_tokens", type=int, default=100)
+    parser.add_argument("--max_new_tokens", type=int, default=None)
+    parser.add_argument("--do_sample", action="store_true", default=None)
+    parser.add_argument("--temperature", type=float, default=None)
+    parser.add_argument("--metrics_output", default=None)
     parser.add_argument("--wandb_project", default=None, help="Enable W&B logging if set")
     parser.add_argument("--wandb_entity", default=None)
     parser.add_argument("--wandb_run_name", default=None)
@@ -129,7 +202,11 @@ if __name__ == "__main__":
         args.n,
         args.output,
         args.pretty,
+        config_path=args.config,
         max_new_tokens=args.max_new_tokens,
+        do_sample=args.do_sample,
+        temperature=args.temperature,
+        metrics_output_path=args.metrics_output,
         wandb_project=args.wandb_project,
         wandb_entity=args.wandb_entity,
         wandb_run_name=args.wandb_run_name,

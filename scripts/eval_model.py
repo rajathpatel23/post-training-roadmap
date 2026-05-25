@@ -6,7 +6,7 @@ metrics are not polluted by system/user prompt text.
 
 Output (write to reports/ and log to W&B):
   - checkpoint name, eval path, generation settings
-  - exact metric scores (format validity, task success, etc.)
+  - exact metric scores (format validity, entity micro P/R/F1, task success, etc.)
   - sampled generations (base vs trained)
   - grouped failure buckets (JSON validity comparison)
 
@@ -27,14 +27,20 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.common.config import ExperimentConfig
-from src.common.generation import decode_assistant_completion, resolve_lm_device
+from src.common.generation import (
+    build_generation_config,
+    decode_assistant_completion,
+    resolve_lm_device,
+)
 from src.common.io import read_jsonl, write_jsonl
 from src.common.logging import init_run, log_metrics, log_samples, finish_run
 from src.evals.exact_match import (
     avg_response_length,
+    entity_micro_prf1,
     exact_field_presence_rate,
     format_validity_rate,
     is_parseable_json,
+    json_structural_match_rate,
 )
 from src.evals.qualitative_dump import bucket_failures
 
@@ -69,18 +75,20 @@ def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> 
                 inputs = tokenizer.apply_chat_template(
                     messages,
                     return_tensors="pt",
+                    return_dict=True,
                     add_generation_prompt=True,
                 )
                 inputs = inputs.to(device)
 
                 input_ids = inputs["input_ids"]
-                gen_out = model.generate(
-                    **inputs,
-                    eos_token_id=tokenizer.eos_token_id,
+                gen_cfg = build_generation_config(
                     max_new_tokens=cfg.eval.generation_max_new_tokens,
                     do_sample=cfg.eval.generation_do_sample,
                     temperature=cfg.eval.generation_temperature,
+                    eos_token_id=tokenizer.eos_token_id,
+                    pad_token_id=tokenizer.pad_token_id,
                 )
+                gen_out = model.generate(**inputs, generation_config=gen_cfg)
                 outs.append(
                     decode_assistant_completion(tokenizer, input_ids, gen_out),
                 )
@@ -108,12 +116,15 @@ def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> 
     # Optional task success if the dataset includes ground_truth fields.
     if all("ground_truth" in r for r in records):
         ground_truths = [str(r["ground_truth"]) for r in records]
-
-        def _verifier_exact(gen: str, gt: str) -> float:
-            return 1.0 if gen.strip() == gt.strip() else 0.0
-
-        success = sum(_verifier_exact(g, gt) for g, gt in zip(trained_outputs, ground_truths)) / len(ground_truths)
-        metrics["eval/task_success_rate_exact"] = float(success)
+        metrics["eval/task_success_rate"] = float(json_structural_match_rate(trained_outputs, ground_truths))
+        p, r, f1 = entity_micro_prf1(trained_outputs, ground_truths)
+        metrics["eval/entity_precision"] = p
+        metrics["eval/entity_recall"] = r
+        metrics["eval/entity_f1"] = f1
+        bp, br, bf1 = entity_micro_prf1(base_outputs, ground_truths)
+        metrics["eval/base_entity_precision"] = bp
+        metrics["eval/base_entity_recall"] = br
+        metrics["eval/base_entity_f1"] = bf1
 
     # Sample side-by-side (qualitative + failure buckets).
     n_samples = min(cfg.eval.num_sample_generations, len(prompts))

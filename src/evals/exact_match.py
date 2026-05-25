@@ -6,9 +6,9 @@ These are intentionally lightweight so they can run on CPU for evaluation.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from collections import Counter
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import json
-import re
 import statistics
 
 
@@ -114,6 +114,118 @@ def task_success_rate(
     for gen, gt in zip(generations, ground_truths):
         scores.append(float(verifier_fn(gen, gt)))
     return statistics.mean(scores) if scores else 0.0
+
+
+def json_structural_match(generation: str, ground_truth: str) -> float:
+    """
+    Return 1.0 when generation and ground_truth parse to the same JSON value.
+
+    This ignores harmless formatting differences in otherwise equivalent JSON.
+    """
+
+    parsed_generation = _try_parse_json(generation)
+    parsed_ground_truth = _try_parse_json(ground_truth)
+    if parsed_generation is None or parsed_ground_truth is None:
+        return 0.0
+    return 1.0 if parsed_generation == parsed_ground_truth else 0.0
+
+
+def json_structural_match_rate(generations: List[str], ground_truths: List[str]) -> float:
+    """Fraction of generations whose parsed JSON exactly matches ground truth JSON."""
+
+    return task_success_rate(generations, ground_truths, json_structural_match)
+
+
+def _normalize_entity_text(text: str) -> str:
+    """Collapse whitespace for stable span matching."""
+
+    return " ".join(str(text).split())
+
+
+def _entity_pairs_from_parsed(obj: Any) -> List[Tuple[str, str]]:
+    """
+    Extract (text, type) pairs from a parsed JSON object with an `entities` list.
+
+    Skips malformed entries. Types are kept as stripped strings (case-sensitive).
+    """
+
+    if not isinstance(obj, dict):
+        return []
+    raw = obj.get("entities")
+    if not isinstance(raw, list):
+        return []
+    out: List[Tuple[str, str]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("text")
+        typ = item.get("type")
+        if text is None or typ is None:
+            continue
+        out.append((_normalize_entity_text(str(text)), str(typ).strip()))
+    return out
+
+
+def _entity_counter_from_json_text(text: str) -> Optional[Counter]:
+    """
+    Multiset of (normalized_text, type) from a model string or JSON ground truth.
+
+    Returns None only if `text` is unparsable as JSON (no object/array substring).
+    If JSON parses but has no usable `entities`, returns an empty Counter.
+    """
+
+    parsed = _try_parse_json(text)
+    if parsed is None:
+        return None
+    return Counter(_entity_pairs_from_parsed(parsed))
+
+
+def entity_tp_fp_fn(pred: Counter, gold: Counter) -> Tuple[int, int, int]:
+    """One-example TP / FP / FN for multiset entity overlap."""
+
+    keys = set(pred) | set(gold)
+    tp = sum(min(pred[k], gold[k]) for k in keys)
+    fp = pred.total() - tp
+    fn = gold.total() - tp
+    return tp, fp, fn
+
+
+def entity_micro_prf1(generations: List[str], ground_truths: List[str]) -> Tuple[float, float, float]:
+    """
+    Micro-averaged precision, recall, and F1 over (text, type) entity pairs.
+
+    - Pairs use normalized text (whitespace collapsed) and exact type string.
+    - Unparseable generations contribute no predicted entities (all gold entities are FN).
+    - Empty gold and empty pred: precision = recall = F1 = 1.0.
+    """
+
+    if len(generations) != len(ground_truths):
+        raise ValueError("generations and ground_truths must have the same length")
+
+    total_tp = total_fp = total_fn = 0
+    for gen, gt in zip(generations, ground_truths):
+        gold_c = _entity_counter_from_json_text(gt)
+        if gold_c is None:
+            continue
+        pred_c = _entity_counter_from_json_text(gen)
+        if pred_c is None:
+            pred_c = Counter()
+        tp, fp, fn = entity_tp_fp_fn(pred_c, gold_c)
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+
+    pred_support = total_tp + total_fp
+    gold_support = total_tp + total_fn
+
+    if pred_support == 0 and gold_support == 0:
+        return 1.0, 1.0, 1.0
+    precision = total_tp / pred_support if pred_support else (0.0 if gold_support > 0 else 1.0)
+    recall = total_tp / gold_support if gold_support else (0.0 if pred_support > 0 else 1.0)
+    if precision + recall == 0.0:
+        return precision, recall, 0.0
+    f1 = 2.0 * precision * recall / (precision + recall)
+    return float(precision), float(recall), float(f1)
 
 
 def avg_response_length(generations: List[str]) -> float:

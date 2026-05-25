@@ -1,0 +1,24 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "prompts_path": "data/eval/sft_eval.jsonl",
+  "output_path": "reports/baseline_samples.jsonl",
+  "num_prompts": 20,
+  "generation_params": {
+    "max_new_tokens": 100,
+    "do_sample": false,
+    "temperature": 0.0
+  },
+  "required_fields": [
+    "entities"
+  ],
+  "entity_matching": "micro multiset over (normalized_text, type); unparseable gen => no predicted entities",
+  "metrics": {
+    "format_validity_rate": 0.75,
+    "exact_field_presence_rate": 0.75,
+    "task_success_rate": 0.0,
+    "avg_response_length": 54.7,
+    "entity_precision": 0.0989010989010989,
+    "entity_recall": 0.1836734693877551,
+    "entity_f1": 0.12857142857142856
+  }
+}
