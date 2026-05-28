@@ -28,24 +28,12 @@ import argparse
 import json
 from pathlib import Path
 
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
 from src.common.config import ExperimentConfig
-from src.common.generation import (
-    build_generation_config,
-    decode_assistant_completion,
-    resolve_lm_device,
-)
+from src.common.generation import resolve_lm_device
 from src.common.io import read_jsonl, write_jsonl
 from src.common.logging import init_run, log_samples, finish_run
-from src.evals.exact_match import (
-    avg_response_length,
-    entity_micro_prf1,
-    exact_field_presence_rate,
-    format_validity_rate,
-    json_structural_match_rate,
-)
+from src.common.model_loading import load_causal_lm_for_inference, load_tokenizer, release_model
+from src.evals.generative_eval import generate_completions, score_generations
 
 
 def main(
@@ -97,39 +85,36 @@ def main(
         )
 
     device = resolve_lm_device()
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
-        tokenizer.pad_token = tokenizer.eos_token
+    fp16 = cfg.training.fp16 if cfg else False
+    bf16 = cfg.training.bf16 if cfg else False
+    base_model = cfg.model.primary if cfg else None
 
-    model = AutoModelForCausalLM.from_pretrained(model_path)
-    model.eval()
-    model.to(device)
+    tokenizer = load_tokenizer(model_path, base_model=base_model)
+    model = load_causal_lm_for_inference(
+        model_path,
+        base_model=base_model,
+        device=device,
+        fp16=fp16,
+        bf16=bf16,
+    )
 
     prompt_records = read_jsonl(prompts_path)[:n]
     prompts = [record["prompt"] for record in prompt_records]
 
-    records: list[dict[str, str]] = []
-    with torch.no_grad():
-        for prompt in prompts:
-            messages = [{"role": "user", "content": prompt}]
-            inputs = tokenizer.apply_chat_template(
-                messages,
-                return_tensors="pt",
-                return_dict=True,
-                add_generation_prompt=True,
-            )
-            inputs = inputs.to(device)
-            input_ids = inputs["input_ids"]
-            gen_cfg = build_generation_config(
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                temperature=temperature,
-                eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.pad_token_id,
-            )
-            output = model.generate(**inputs, generation_config=gen_cfg)
-            text = decode_assistant_completion(tokenizer, input_ids, output)
-            records.append({"prompt": prompt, "output": text})
+    outputs = generate_completions(
+        model,
+        tokenizer,
+        prompts,
+        device=device,
+        max_new_tokens=max_new_tokens,
+        do_sample=do_sample,
+        temperature=temperature,
+    )
+    release_model(model)
+
+    records: list[dict[str, str]] = [
+        {"prompt": prompt, "output": text} for prompt, text in zip(prompts, outputs, strict=True)
+    ]
 
     if pretty:
         with open(output_path, "w", encoding="utf-8") as f:
@@ -137,21 +122,9 @@ def main(
     else:
         write_jsonl(records, output_path)
 
-    outputs = [record["output"] for record in records]
-    metrics: dict[str, float] = {
-        "format_validity_rate": float(format_validity_rate(outputs)),
-        "avg_response_length": float(avg_response_length(outputs)),
-    }
-    if required_fields:
-        metrics["exact_field_presence_rate"] = float(exact_field_presence_rate(outputs, required_fields))
-
     ground_truths = [record["ground_truth"] for record in prompt_records if "ground_truth" in record]
-    if len(ground_truths) == len(outputs):
-        metrics["task_success_rate"] = float(json_structural_match_rate(outputs, ground_truths))
-        ep, er, ef1 = entity_micro_prf1(outputs, ground_truths)
-        metrics["entity_precision"] = ep
-        metrics["entity_recall"] = er
-        metrics["entity_f1"] = ef1
+    gt_for_score = ground_truths if len(ground_truths) == len(outputs) else None
+    metrics = score_generations(outputs, gt_for_score, required_fields=required_fields or None)
 
     if metrics_output_path:
         metrics_payload = {

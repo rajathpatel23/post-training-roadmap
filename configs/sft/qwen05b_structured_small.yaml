@@ -1,0 +1,29 @@
+defaults:
+  - base
+
+# Data-size ablation: ~2k train rows, same held-out eval as stable run.
+project: "project1_sft"
+run_name: "qwen05b-structured-sft-small-2k"
+
+model:
+  primary: "Qwen/Qwen2.5-0.5B-Instruct"
+
+training:
+  max_length: 512
+  learning_rate: 2.0e-4
+  per_device_train_batch_size: 4
+  num_train_epochs: 2
+  output_dir: "outputs/project1_sft_small_2k"
+
+eval:
+  required_fields: ["entities"]
+
+data:
+  train_path: "data/processed/sft_train.jsonl"
+  eval_path: "data/eval/sft_eval.jsonl"
+  train_subset_size: 2000
+
+sft_data:
+  hf_split: "train"
+  train_fraction: 0.8
+  seed: 42

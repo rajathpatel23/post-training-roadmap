@@ -8,6 +8,9 @@ uses `tokenizer.apply_chat_template` — aligned with `eval_model.py`.
 Run from repo root:
     python scripts/train_sft.py --config configs/sft/qwen05b_structured.yaml
 
+After training, pick best checkpoint by entity F1 and merge LoRA weights:
+    python scripts/train_sft.py --config configs/sft/qwen05b_structured.yaml --select_best_by_f1
+
 Smoke test (skips eval loop for speed; still tokenizes full train set once):
     python scripts/train_sft.py --config configs/sft/qwen05b_structured.yaml --max_steps 3
 """
@@ -15,6 +18,7 @@ Smoke test (skips eval loop for speed; still tokenizes full train set once):
 from __future__ import annotations
 
 import argparse
+import random
 from pathlib import Path
 
 import torch
@@ -128,11 +132,36 @@ def _lora_config(cfg: ExperimentConfig) -> LoraConfig | None:
     )
 
 
-def main(config_path: str, *, max_steps: int | None = None) -> None:
+def _subset_train_rows(rows: list[dict], subset_size: int | None, seed: int) -> list[dict]:
+    if subset_size is None or subset_size >= len(rows):
+        return rows
+    if subset_size < 1:
+        raise ValueError("data.train_subset_size must be >= 1")
+    rng = random.Random(seed)
+    indices = rng.sample(range(len(rows)), subset_size)
+    return [rows[i] for i in indices]
+
+
+def main(
+    config_path: str,
+    *,
+    max_steps: int | None = None,
+    select_best_by_f1: bool = False,
+) -> None:
     cfg_path = Path(config_path).resolve()
     cfg = ExperimentConfig.from_yaml(str(cfg_path))
 
     train_rows = read_jsonl(_abs_data_path(cfg.data.train_path))
+    train_rows = _subset_train_rows(
+        train_rows,
+        cfg.data.train_subset_size,
+        cfg.training.seed,
+    )
+    if cfg.data.train_subset_size is not None:
+        print(
+            f"Train subset: {len(train_rows)} / full file "
+            f"(data.train_subset_size={cfg.data.train_subset_size}, seed={cfg.training.seed})"
+        )
     train_data = _rows_to_conv_sft(train_rows, response_key="response")
     train_dataset = Dataset.from_list(train_data)
 
@@ -167,6 +196,17 @@ def main(config_path: str, *, max_steps: int | None = None) -> None:
     trainer.save_model(sft_args.output_dir)
     tokenizer.save_pretrained(sft_args.output_dir)
 
+    if select_best_by_f1 and not smoke:
+        from src.common.checkpoint_selection import select_best_by_entity_f1
+
+        select_best_by_entity_f1(
+            config_path=str(cfg_path),
+            output_dir=sft_args.output_dir,
+            eval_path=_abs_data_path(cfg.data.eval_path),
+            merge=True,
+            repo_root=REPO_ROOT,
+        )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -177,5 +217,10 @@ if __name__ == "__main__":
         default=None,
         help="If set, train for exactly this many steps (overrides epochs) for smoke tests.",
     )
+    parser.add_argument(
+        "--select_best_by_f1",
+        action="store_true",
+        help="After training, score saved checkpoints on entity F1 and merge the best LoRA adapter.",
+    )
     args = parser.parse_args()
-    main(args.config, max_steps=args.max_steps)
+    main(args.config, max_steps=args.max_steps, select_best_by_f1=args.select_best_by_f1)

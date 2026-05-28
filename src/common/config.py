@@ -96,6 +96,8 @@ class LoggingConfig:
 class DataConfig:
     train_path: str
     eval_path: str
+    # Optional cap for data-size ablations — subsets train JSONL only; eval file unchanged.
+    train_subset_size: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -207,7 +209,12 @@ class ExperimentConfig:
         )
 
         logging_cfg = LoggingConfig(**merged["logging"])
-        data_cfg = DataConfig(**merged["data"])
+        data_merged = merged.get("data", {})
+        data_cfg = DataConfig(
+            train_path=data_merged["train_path"],
+            eval_path=data_merged["eval_path"],
+            train_subset_size=data_merged.get("train_subset_size"),
+        )
 
         known_keys = {"project", "run_name", "model", "lora", "training", "eval", "logging", "data"}
         extra = {k: v for k, v in merged.items() if k not in known_keys}

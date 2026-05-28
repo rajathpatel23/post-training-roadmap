@@ -21,6 +21,7 @@ eval:
 data:
   train_path: "data/processed/sft_train.jsonl"
   eval_path:  "data/eval/sft_eval.jsonl"     # fixed from day 1, never shuffled
+  # train_subset_size: 2000   # optional — see qwen05b_structured_small.yaml ablation
 
 # Project 1 data prep (scripts/prepare_sft_data.py)
 sft_data:

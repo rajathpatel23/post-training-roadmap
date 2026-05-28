@@ -36,9 +36,9 @@ lora:
 eval:
   eval_steps: 100
   save_steps: 100
-  save_total_limit: 2
-  load_best_model_at_end: true
-  metric_for_best_model: "eval_loss"
+  save_total_limit: 5          # keep several checkpoints for post-hoc entity F1 selection
+  load_best_model_at_end: false # Option C: pick best checkpoint by entity F1 after training
+  metric_for_best_model: "eval_loss"  # logged during training; F1 selection is post-hoc
   generation_max_new_tokens: 256
   generation_temperature: 0.0       # greedy during eval — fixed for reproducibility
   generation_do_sample: false

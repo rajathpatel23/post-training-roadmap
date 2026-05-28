@@ -23,25 +23,13 @@ import argparse
 
 import os
 
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
 from src.common.config import ExperimentConfig
-from src.common.generation import (
-    build_generation_config,
-    decode_assistant_completion,
-    resolve_lm_device,
-)
+from src.common.generation import resolve_lm_device
 from src.common.io import read_jsonl, write_jsonl
 from src.common.logging import init_run, log_metrics, log_samples, finish_run
-from src.evals.exact_match import (
-    avg_response_length,
-    entity_micro_prf1,
-    exact_field_presence_rate,
-    format_validity_rate,
-    is_parseable_json,
-    json_structural_match_rate,
-)
+from src.common.model_loading import load_causal_lm_for_inference, load_tokenizer, release_model
+from src.evals.generative_eval import generate_completions, score_generations
+from src.evals.exact_match import is_parseable_json
 from src.evals.qualitative_dump import bucket_failures
 
 
@@ -58,73 +46,53 @@ def main(config_path: str, checkpoint: str, eval_path: str, output_dir: str) -> 
     checkpoint_name = os.path.basename(os.path.normpath(checkpoint))
 
     device = resolve_lm_device()
-
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model.primary)
-    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
-        tokenizer.pad_token = tokenizer.eos_token
+    fp16 = cfg.training.fp16
+    bf16 = cfg.training.bf16
 
     def generate_with(model_path: str) -> list[str]:
-        model = AutoModelForCausalLM.from_pretrained(model_path)
-        model.eval()
-        model.to(device)
-
-        outs: list[str] = []
-        with torch.no_grad():
-            for prompt in prompts:
-                messages = [{"role": "user", "content": prompt}]
-                inputs = tokenizer.apply_chat_template(
-                    messages,
-                    return_tensors="pt",
-                    return_dict=True,
-                    add_generation_prompt=True,
-                )
-                inputs = inputs.to(device)
-
-                input_ids = inputs["input_ids"]
-                gen_cfg = build_generation_config(
-                    max_new_tokens=cfg.eval.generation_max_new_tokens,
-                    do_sample=cfg.eval.generation_do_sample,
-                    temperature=cfg.eval.generation_temperature,
-                    eos_token_id=tokenizer.eos_token_id,
-                    pad_token_id=tokenizer.pad_token_id,
-                )
-                gen_out = model.generate(**inputs, generation_config=gen_cfg)
-                outs.append(
-                    decode_assistant_completion(tokenizer, input_ids, gen_out),
-                )
-
-        del model
-        try:
-            torch.mps.empty_cache()  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        tokenizer = load_tokenizer(model_path, base_model=cfg.model.primary)
+        model = load_causal_lm_for_inference(
+            model_path,
+            base_model=cfg.model.primary,
+            device=device,
+            fp16=fp16,
+            bf16=bf16,
+        )
+        outs = generate_completions(
+            model,
+            tokenizer,
+            prompts,
+            device=device,
+            max_new_tokens=cfg.eval.generation_max_new_tokens,
+            do_sample=cfg.eval.generation_do_sample,
+            temperature=cfg.eval.generation_temperature,
+        )
+        release_model(model)
         return outs
 
     base_outputs = generate_with(cfg.model.primary)
     trained_outputs = generate_with(checkpoint)
 
-    # Metrics
-    metrics: dict[str, float] = {
-        "eval/format_validity_rate": float(format_validity_rate(trained_outputs)),
-        "eval/avg_response_length": float(avg_response_length(trained_outputs)),
-    }
-    if cfg.eval.required_fields:
-        metrics["eval/exact_field_presence_rate"] = float(
-            exact_field_presence_rate(trained_outputs, cfg.eval.required_fields)
-        )
+    ground_truths = [str(r["ground_truth"]) for r in records] if all("ground_truth" in r for r in records) else None
+    required_fields = cfg.eval.required_fields or []
 
-    # Optional task success if the dataset includes ground_truth fields.
-    if all("ground_truth" in r for r in records):
-        ground_truths = [str(r["ground_truth"]) for r in records]
-        metrics["eval/task_success_rate"] = float(json_structural_match_rate(trained_outputs, ground_truths))
-        p, r, f1 = entity_micro_prf1(trained_outputs, ground_truths)
-        metrics["eval/entity_precision"] = p
-        metrics["eval/entity_recall"] = r
-        metrics["eval/entity_f1"] = f1
-        bp, br, bf1 = entity_micro_prf1(base_outputs, ground_truths)
-        metrics["eval/base_entity_precision"] = bp
-        metrics["eval/base_entity_recall"] = br
-        metrics["eval/base_entity_f1"] = bf1
+    trained_metrics = score_generations(trained_outputs, ground_truths, required_fields=required_fields)
+    base_metrics = score_generations(base_outputs, ground_truths, required_fields=required_fields)
+
+    metrics: dict[str, float] = {
+        "eval/format_validity_rate": trained_metrics["format_validity_rate"],
+        "eval/avg_response_length": trained_metrics["avg_response_length"],
+    }
+    if "exact_field_presence_rate" in trained_metrics:
+        metrics["eval/exact_field_presence_rate"] = trained_metrics["exact_field_presence_rate"]
+    if ground_truths is not None:
+        metrics["eval/task_success_rate"] = trained_metrics["task_success_rate"]
+        metrics["eval/entity_precision"] = trained_metrics["entity_precision"]
+        metrics["eval/entity_recall"] = trained_metrics["entity_recall"]
+        metrics["eval/entity_f1"] = trained_metrics["entity_f1"]
+        metrics["eval/base_entity_precision"] = base_metrics["entity_precision"]
+        metrics["eval/base_entity_recall"] = base_metrics["entity_recall"]
+        metrics["eval/base_entity_f1"] = base_metrics["entity_f1"]
 
     # Sample side-by-side (qualitative + failure buckets).
     n_samples = min(cfg.eval.num_sample_generations, len(prompts))
