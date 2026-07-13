@@ -1,0 +1,16 @@
+model_config: gpt_small_bpe
+
+# batch_size is much lower than the char config (64) on purpose — logits are
+# (batch_size, block_size, vocab_size); at vocab_size=50,257 that tensor is
+# ~760x bigger per example than char's ~66-vocab logits, and batch=64 was
+# thrashing memory badly enough to lock up the machine. Lower this further
+# if it's still too heavy; raise it later once you have headroom to spare.
+batch_size: 8
+learning_rate: 3.0e-4
+max_iters: 2000
+eval_interval: 200
+eval_iters: 50
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-v1

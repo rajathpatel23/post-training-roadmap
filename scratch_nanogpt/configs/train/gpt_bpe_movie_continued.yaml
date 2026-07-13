@@ -1,0 +1,32 @@
+model_config: gpt_small_bpe  # must match the checkpoint's architecture (12 layer, 8 head, 128 embd, block_size 256)
+
+# Continue from the just-completed Shakespeare BPE run rather than random init.
+init_from: out_bpe/tinygpt_shakespeare.pt
+
+# New corpus for this stage — Cornell Movie-Dialogs (built via movie_data_prep.py).
+data_path: data/movie_dialogue.txt
+
+# Forgetting check: also score val loss on the *original* Shakespeare corpus
+# every eval step. If this climbs while movie val loss drops, that's
+# catastrophic forgetting — the whole point of tracking it explicitly rather
+# than assuming either outcome.
+secondary_eval_path: data/tinyshakespeare.txt
+
+output_dir: out_bpe_movie
+
+# Same batch_size lesson as the Shakespeare BPE run — vocab_size=50,257 makes
+# the logits tensor huge; keep this low unless you've confirmed headroom.
+batch_size: 8
+
+# Lower than the from-scratch runs (3e-4) — continuing from an already-trained
+# checkpoint calls for smaller updates, standard practice for continued
+# pretraining to avoid destabilizing what the model already learned.
+learning_rate: 1.0e-4
+
+max_iters: 4000
+eval_interval: 200
+eval_iters: 50
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-movie-continued-v1

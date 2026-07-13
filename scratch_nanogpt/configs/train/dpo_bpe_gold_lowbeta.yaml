@@ -1,0 +1,29 @@
+model_config: gpt_small_bpe  # must match out_sft_bpe/'s architecture (12 layer, 8 head, 128 embd, block_size 256)
+
+sft_checkpoint: out_sft_bpe/tinygpt_sft.pt
+pretrained_checkpoint: out_bpe/tinygpt_shakespeare.pt
+
+dpo_train_path: data/dpo_gold/train.jsonl
+dpo_eval_path: data/dpo_gold/eval.jsonl
+output_dir: out_dpo_gold_bpe_lowbeta
+
+# The one deliberately manipulated variable vs dpo_bpe_gold.yaml. That run
+# (beta=0.1) produced confirmed reward over-optimization: eval accuracy
+# saturated near 1.0 about a third of the way through training, but the
+# margin never stopped climbing (final train_margin=10.37, train_loss
+# ~0), and the checkpoint qualitatively collapsed into broken BPE token
+# sequences on every fixed prompt — confirmed NOT a pre-existing weakness,
+# since 20 stochastic samples from the untouched SFT checkpoint at the same
+# temperature produced zero broken outputs. A lower beta anchors the policy
+# closer to that demonstrably well-behaved reference for the same
+# preference margin — this run tests whether that alone fixes it.
+beta: 0.02
+
+batch_size: 8
+learning_rate: 5.0e-5
+num_epochs: 3
+eval_interval: 50
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-dpo-gold-lowbeta-v1

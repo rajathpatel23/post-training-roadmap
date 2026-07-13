@@ -1,0 +1,8 @@
+# Architecture for TinyBERT. block_size is smaller than GPT's — sentence pairs
+# ([CLS] segA [SEP] segB [SEP]) are much shorter than GPT's contiguous windows.
+type: bert
+block_size: 128
+n_layer: 12
+n_head: 8
+n_embd: 128
+dropout: 0.1

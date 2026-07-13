@@ -112,20 +112,32 @@ def log_samples(
     *,
     step: int,
     table_name: str,
+    columns: Optional[List[str]] = None,
 ) -> None:
     """
-    Log sample generations to W&B as a table.
+    Log arbitrary rows to W&B as a table.
 
-    Expected columns:
+    Default shape (columns=None) is the original prompt/base/trained
+    convention used by the SFT/DPO/GRPO eval scripts:
     - `prompt`
     - `base_output` (optional)
     - `trained_output` (optional)
+
+    Pass an explicit `columns` list for any other row shape (e.g. TinyBERT's
+    mask-probe table: ["sentence", "true_char", "predicted_char"]) — rows are
+    then read straight from those keys in each sample dict.
     """
 
     if run is None:
         return
 
     import wandb
+
+    if columns is not None:
+        data_rows = [[s.get(c) for c in columns] for s in samples]
+        table = wandb.Table(columns=columns, data=data_rows)
+        run.log({table_name: table}, step=step)
+        return
 
     columns = ["prompt", "base_output", "trained_output"]
     data_rows = []

@@ -1,0 +1,30 @@
+model_config: gpt_small_bpe  # must match out_sft_bpe/'s architecture (12 layer, 8 head, 128 embd, block_size 256)
+
+sft_checkpoint: out_sft_bpe/tinygpt_sft.pt
+pretrained_checkpoint: out_bpe/tinygpt_shakespeare.pt
+
+dpo_train_path: data/dpo_gold/train.jsonl
+dpo_eval_path: data/dpo_gold/eval.jsonl
+output_dir: out_dpo_gold_bpe_lowlr
+
+# Back to the original beta=0.1 — dpo_bpe_gold_lowbeta.yaml (beta=0.02)
+# reduced the margin/accuracy numbers but did NOT fix the qualitative
+# collapse, and tracing the multi-sample logs showed off-topic vocabulary
+# contamination ("racism", "Fahrenheit", "Zimbabwe") present from step 50
+# onward in BOTH runs — too early to be "trained past saturation." beta
+# wasn't the lever. Testing learning_rate instead: DPO's loss sums log-probs
+# over the sequence (a much larger-magnitude gradient per step than SFT's
+# per-token mean loss at the same lr), which could be spilling over onto
+# nearby, never-suppressed vocabulary directions in this model's very
+# compressed 128-dim hidden space (50,257 vocab / 128 dims is an extreme
+# ratio). 10x lower learning rate than every prior run.
+beta: 0.1
+learning_rate: 5.0e-6
+
+batch_size: 8
+num_epochs: 3
+eval_interval: 50
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-dpo-gold-lowlr-v1

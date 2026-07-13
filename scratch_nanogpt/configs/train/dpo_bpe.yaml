@@ -1,0 +1,31 @@
+model_config: gpt_small_bpe  # must match out_sft_bpe/'s architecture (12 layer, 8 head, 128 embd, block_size 256)
+
+# Initializes BOTH the trainable policy and the frozen reference model.
+sft_checkpoint: out_sft_bpe/tinygpt_sft.pt
+
+# Not used for training at all — only for the three-way qualitative
+# comparison (pretrained -> SFT -> DPO) on the same fixed prompts.
+pretrained_checkpoint: out_bpe/tinygpt_shakespeare.pt
+
+dpo_train_path: data/dpo/train.jsonl
+dpo_eval_path: data/dpo/eval.jsonl
+output_dir: out_dpo_bpe
+
+# Standard DPO default — how strongly to penalize the policy for drifting
+# from the reference relative to the preference signal.
+beta: 0.1
+
+# Small dataset (~260 pairs after generation) — two forward passes (chosen +
+# rejected) under two models (policy + reference) per step, so this is
+# already ~4x the compute of one SFT step at the same batch size. Kept
+# modest; still far below the memory-thrashing territory hit at BPE
+# pretraining's batch_size=64.
+batch_size: 8
+learning_rate: 5.0e-5
+
+num_epochs: 3
+eval_interval: 20  # smaller dataset than SFT's — more frequent eval makes sense
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-dpo-v1

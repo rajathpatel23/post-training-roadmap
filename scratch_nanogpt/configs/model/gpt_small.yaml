@@ -1,0 +1,8 @@
+# Architecture for TinyGPT — bump n_layer/n_embd here once training works, no code changes.
+type: gpt
+tokenizer: char
+block_size: 256
+n_layer: 4
+n_head: 4
+n_embd: 128
+dropout: 0.1

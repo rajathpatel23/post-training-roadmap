@@ -1,0 +1,29 @@
+model_config: gpt_small_bpe
+
+# Continue training from the SFT checkpoint that just finished, instead of
+# restarting from the pretrained base — eval loss was still barely declining
+# (4.353 -> 4.351 in the last 200 steps) when the first run ended.
+init_from: out_sft_bpe/tinygpt_sft.pt
+
+# Explicit — without this, the qualitative "base" comparison would default
+# to init_from above (the SFT checkpoint) and silently become SFT-vs-SFT
+# instead of pretrained-vs-SFT. This keeps it anchored to the true original.
+reference_checkpoint: out_bpe/tinygpt_shakespeare.pt
+
+# Continue the step counter / loss history from the first run's
+# train_history.json instead of restarting the plot at step 0.
+continue_history: true
+
+sft_train_path: data/sft/train.jsonl
+sft_eval_path: data/sft/eval.jsonl
+output_dir: out_sft_bpe  # same dir as the first run — continues train_history.json, overwrites the checkpoint with the further-trained version
+
+batch_size: 16
+learning_rate: 5.0e-5
+
+num_epochs: 2  # a few more epochs on top of the first run's 3, not a full restart
+eval_interval: 100
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-sft-v2-resumed

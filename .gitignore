@@ -16,3 +16,8 @@ data/eval/
 *.egg-info/
 *.env.example
 *.env
+# scratch_nanogpt local artifacts
+scratch_nanogpt/data/
+scratch_nanogpt/out/
+scratch_nanogpt/out_*/
+scratch_nanogpt/Untitled

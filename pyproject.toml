@@ -20,7 +20,12 @@ dependencies = [
     "jupyter",
     "pyyaml",
     "bitsandbytes",
+    "matplotlib>=3.11.0",
+    "anthropic",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest"]
 
 [tool.setuptools.packages.find]
 where = ["."]

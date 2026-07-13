@@ -1,0 +1,10 @@
+# Same architecture as gpt_small.yaml — only the tokenizer differs. Comparing
+# these two side by side is the point: same model shape, same data, different
+# tokenization granularity.
+type: gpt
+tokenizer: bpe
+block_size: 256
+n_layer: 12
+n_head: 8
+n_embd: 128
+dropout: 0.1

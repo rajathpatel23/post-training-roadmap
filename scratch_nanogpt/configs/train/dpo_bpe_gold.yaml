@@ -1,0 +1,35 @@
+model_config: gpt_small_bpe  # must match out_sft_bpe/'s architecture (12 layer, 8 head, 128 embd, block_size 256)
+
+# Initializes BOTH the trainable policy and the frozen reference model.
+sft_checkpoint: out_sft_bpe/tinygpt_sft.pt
+
+# Not used for training at all — only for the three-way qualitative
+# comparison (pretrained -> SFT -> DPO) on the same fixed prompts.
+pretrained_checkpoint: out_bpe/tinygpt_shakespeare.pt
+
+# Gold dataset (dpo_gold_data.py): Claude-authored "chosen" completions vs
+# the SFT model's own samples as "rejected" — a genuine quality gap, unlike
+# dpo_bpe.yaml's rule-based-heuristic dataset (dpo_data.py) where both sides
+# were noisy samples from the SAME weak model. See reports/scratch_nanogpt.md
+# for why that first DPO run was mechanically correct but qualitatively
+# didn't improve over SFT (reward-hacking/proxy-divergence finding).
+dpo_train_path: data/dpo_gold/train.jsonl
+dpo_eval_path: data/dpo_gold/eval.jsonl
+output_dir: out_dpo_gold_bpe
+
+# Same beta/batch_size/learning_rate as dpo_bpe.yaml deliberately — the
+# manipulated variable across the two runs should be the DATA SOURCE, not
+# hyperparameters, so the comparison stays clean.
+beta: 0.1
+batch_size: 8
+learning_rate: 5.0e-5
+
+# Dataset is ~14x bigger than dpo_bpe.yaml's (2325 vs 168 train examples),
+# so eval_interval is scaled up too — otherwise eval would fire ~14x more
+# often per epoch, mostly noise rather than added signal.
+num_epochs: 3
+eval_interval: 50
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-dpo-gold-v1

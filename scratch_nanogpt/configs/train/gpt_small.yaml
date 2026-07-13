@@ -1,0 +1,11 @@
+model_config: gpt_small
+
+batch_size: 64
+learning_rate: 3.0e-4
+max_iters: 2000
+eval_interval: 200
+eval_iters: 50
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-v1

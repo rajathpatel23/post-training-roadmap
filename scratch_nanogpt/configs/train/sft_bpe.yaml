@@ -1,0 +1,25 @@
+model_config: gpt_small_bpe  # must match out_bpe/'s architecture (12 layer, 8 head, 128 embd, block_size 256)
+
+# Pre-movie checkpoint — Run 4 showed the post-movie one has real forgetting
+# of Shakespeare quality, so SFT builds on the checkpoint that still has it.
+init_from: out_bpe/tinygpt_shakespeare.pt
+
+sft_train_path: data/sft/train.jsonl
+sft_eval_path: data/sft/eval.jsonl
+output_dir: out_sft_bpe
+
+# Sequences here are much shorter than pretraining's fixed 256-token windows
+# (prompt + one sentence + EOS, typically 10-60 tokens) — batch_size can be
+# well above the pretraining runs' 8 without the memory issues those hit.
+batch_size: 16
+
+# Lower than pretraining (3e-4) or continued-pretraining (1e-4) — standard
+# for SFT, small updates on top of an already-converged base.
+learning_rate: 5.0e-5
+
+num_epochs: 3
+eval_interval: 100  # in steps, not epochs — ~357 steps/epoch at batch_size 16
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-sft-v1
