@@ -1,0 +1,27 @@
+model_config: gpt_small_bpe  # must match out_sft_bpe/'s architecture (12 layer, 8 head, 128 embd, block_size 256)
+
+dpo_checkpoint: out_dpo_gold_bpe_lowlr/tinygpt_dpo.pt
+sft_checkpoint: out_sft_bpe/tinygpt_sft.pt
+pretrained_checkpoint: out_bpe/tinygpt_shakespeare.pt
+
+prompts_path: data/sft/train.jsonl
+eval_prompts_path: data/sft/eval.jsonl
+output_dir: out_grpo_bpe
+
+group_size: 6  # K completions per prompt, sampled live from the current policy each step
+
+# Starting conservative given the DPO lr lesson: GRPO's loss is yet another
+# shape (advantage-weighted log-prob sum, not a sequence-summed pairwise
+# margin) — don't assume DPO's 5e-6 transfers. Watch gradient magnitude vs.
+# loss shape in the first ~50 steps before trusting this.
+learning_rate: 5.0e-6
+kl_coef: 0.05
+
+batch_size: 4  # distinct prompts per step -> 4 * group_size = 24 rollouts/step
+num_epochs: 1  # on-policy: "epoch" here means one pass over the prompt list, not static-dataset reuse
+eval_interval: 25
+max_new_tokens: 80
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-grpo-v1

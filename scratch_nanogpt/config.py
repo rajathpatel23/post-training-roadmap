@@ -166,3 +166,46 @@ def load_dpo_train_config(path: str) -> DPOTrainConfig:
     raw = _load_yaml_merged(path)
     raw["model"] = ModelConfig(**raw["model"])
     return DPOTrainConfig(**raw)
+
+
+@dataclass(frozen=True)
+class GRPOTrainConfig:
+    """train_grpo.py — GRPO on top of the working DPO checkpoint.
+
+    dpo_checkpoint initializes *both* the trainable policy and the frozen
+    reference (KL anchor) — same "one checkpoint, two roles" setup DPO used
+    with sft_checkpoint, one level further down the chain. pretrained/sft
+    checkpoints are unrelated to training, only used to extend the
+    qualitative comparison to four stages (pretrained -> SFT -> DPO -> GRPO)
+    instead of DPO's three.
+
+    No dpo_train_path/dpo_eval_path equivalent here: GRPO has no static
+    preference dataset, it samples live from the policy every step. prompts_path
+    plays the role DPO's *_path pair played, but it's just a prompt list
+    (reused from the same SFT prompt set dpo_data.py drew from), not
+    precomputed (prompt, chosen, rejected) triples.
+    """
+
+    model: ModelConfig
+    dpo_checkpoint: str
+    sft_checkpoint: str
+    pretrained_checkpoint: str
+    prompts_path: str
+    eval_prompts_path: str
+    group_size: int
+    kl_coef: float
+    batch_size: int
+    learning_rate: float
+    num_epochs: int
+    eval_interval: int
+    max_new_tokens: int
+    seed: int
+    wandb_project: str
+    wandb_run_name: str
+    output_dir: Optional[str] = None
+
+
+def load_grpo_train_config(path: str) -> GRPOTrainConfig:
+    raw = _load_yaml_merged(path)
+    raw["model"] = ModelConfig(**raw["model"])
+    return GRPOTrainConfig(**raw)
