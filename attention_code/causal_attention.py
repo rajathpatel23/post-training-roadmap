@@ -49,6 +49,6 @@ if __name__ == "__main__":
     future = torch.triu(torch.ones(10, 10, dtype=torch.bool), diagonal=1)
     print(future)
     assert torch.allclose(attn_weights[:, :, future], torch.zeros(()), atol=1e-6)
-    print(attn_weights)
+    # print(attn_weights)
     print(output.shape)
     print("upper triangle after softmax:", attn_weights[0, 0, future].abs().max().item())
