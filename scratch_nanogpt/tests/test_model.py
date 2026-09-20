@@ -83,3 +83,46 @@ def test_causal_mask_alone_blocks_future_positions():
 
     # Positions 0, 1, 2 come before position 3 — causally forbidden from seeing it.
     assert torch.allclose(out_before[:, :3, :], out_after[:, :3, :], atol=1e-5)
+
+
+def test_cached_decode_logits_match_full_forward():
+    """Prefill + one cached decode must match a full causal forward on the
+    concatenated sequence. That is the KV-cache correctness check."""
+    from model import TinyGPT
+
+    torch.manual_seed(0)
+    model = TinyGPT(vocab_size=32, block_size=16, n_layer=2, n_head=2, n_embd=8, dropout=0.0)
+    model.eval()
+
+    prompt = torch.randint(0, 32, (2, 5))
+    new_tok = torch.randint(0, 32, (2, 1))
+    full = torch.cat([prompt, new_tok], dim=1)
+
+    with torch.no_grad():
+        logits_full, _ = model(full)
+        logits_prefill, caches = model._forward_with_cache(prompt, start_pos=0, kv_caches=None)
+        logits_decode, caches = model._forward_with_cache(
+            new_tok, start_pos=prompt.size(1), kv_caches=caches
+        )
+
+    assert logits_prefill.shape == (2, 5, 32)
+    assert logits_decode.shape == (2, 1, 32)
+    assert caches[0][0].shape == (2, 2, 6, 4)  # B, H, L, d_h
+    assert torch.allclose(logits_full[:, :5, :], logits_prefill, atol=1e-5)
+    assert torch.allclose(logits_full[:, -1:, :], logits_decode, atol=1e-5)
+
+
+def test_generate_cached_matches_windowed_greedy():
+    from model import TinyGPT
+
+    torch.manual_seed(1)
+    model = TinyGPT(vocab_size=32, block_size=16, n_layer=2, n_head=2, n_embd=8, dropout=0.0)
+    model.eval()
+    prompt = torch.randint(0, 32, (1, 4))
+
+    with torch.no_grad():
+        cached = model.generate(prompt.clone(), max_new_tokens=5, temperature=0.0)
+        windowed = model._generate_windowed(prompt.clone(), 5, temperature=0.0, top_k=None, eos_id=None)
+
+    assert cached.shape == windowed.shape
+    assert torch.equal(cached, windowed)

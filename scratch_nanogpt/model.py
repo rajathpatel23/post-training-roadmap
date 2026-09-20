@@ -41,11 +41,21 @@ class Attention(nn.Module):
             mask = torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size)
             self.register_buffer("causal_mask", mask)
 
-    def forward(self, x: torch.Tensor, key_padding_mask: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        key_padding_mask: torch.Tensor | None = None,
+        kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None,
+        use_cache: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """key_padding_mask: (B, T) bool, True = real token, False = padding.
         For GPT (causal=True), used for batched variable-length sequences
         (e.g. SFT prompt+response pairs) — combined with the causal mask, not
-        a replacement for it. For BERT (causal=False), it's the only mask."""
+        a replacement for it. For BERT (causal=False), it's the only mask.
+
+        kv_cache: optional (k, v) each [B, H, L, d_h] already projected.
+        x is only the new tokens (prompt on prefill, one token on decode).
+        Training keeps use_cache=False and still returns a single tensor."""
         B, T, C = x.shape
 
         qkv = self.qkv_proj(x)
@@ -55,16 +65,22 @@ class Attention(nn.Module):
         k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
 
+        if kv_cache is not None:
+            k = torch.cat([kv_cache[0], k], dim=2)
+            v = torch.cat([kv_cache[1], v], dim=2)
+
+        Tk = k.size(2)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
 
         if self.causal:
-            blocked = self.causal_mask[:, :, :T, :T] == 0
+            # Queries are the last T positions of a length-Tk sequence.
+            blocked = self.causal_mask[:, :, Tk - T : Tk, :Tk] == 0
             if key_padding_mask is not None:
-                blocked = blocked | ~key_padding_mask.view(B, 1, 1, T)
+                blocked = blocked | ~key_padding_mask.view(B, 1, 1, Tk)
             att = att.masked_fill(blocked, float("-inf"))
         elif key_padding_mask is not None:
             # Block attention *to* padding positions (key dim), for every query and every head.
-            mask = key_padding_mask.view(B, 1, 1, T)
+            mask = key_padding_mask.view(B, 1, 1, Tk)
             att = att.masked_fill(~mask, float("-inf"))
 
         att = F.softmax(att, dim=-1)
@@ -72,7 +88,10 @@ class Attention(nn.Module):
 
         y = att @ v
         y = y.transpose(1, 2).contiguous().view(B, T, C)
-        return self.resid_dropout(self.out_proj(y))
+        y = self.resid_dropout(self.out_proj(y))
+        if use_cache:
+            return y, (k, v)
+        return y
 
 
 class MLP(nn.Module):
@@ -98,9 +117,25 @@ class Block(nn.Module):
         self.ln2 = nn.LayerNorm(n_embd)
         self.mlp = MLP(n_embd, dropout)
 
-    def forward(self, x: torch.Tensor, key_padding_mask: torch.Tensor | None = None) -> torch.Tensor:
-        x = x + self.attn(self.ln1(x), key_padding_mask=key_padding_mask)
+    def forward(
+        self,
+        x: torch.Tensor,
+        key_padding_mask: torch.Tensor | None = None,
+        kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None,
+        use_cache: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        attn_out = self.attn(
+            self.ln1(x),
+            key_padding_mask=key_padding_mask,
+            kv_cache=kv_cache,
+            use_cache=use_cache,
+        )
+        if use_cache:
+            attn_out, kv_cache = attn_out
+        x = x + attn_out
         x = x + self.mlp(self.ln2(x))
+        if use_cache:
+            return x, kv_cache
         return x
 
 
@@ -158,6 +193,63 @@ class TinyGPT(nn.Module):
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-100)
         return logits, loss
 
+    def _forward_with_cache(
+        self,
+        idx: torch.Tensor,
+        start_pos: int,
+        kv_caches: list[tuple[torch.Tensor, torch.Tensor]] | None,
+    ) -> tuple[torch.Tensor, list[tuple[torch.Tensor, torch.Tensor]]]:
+        """Prefill or decode. idx is only the new tokens; start_pos is their
+        first absolute position so pos_emb is not reset to 0 on every step."""
+        B, T = idx.shape
+        assert start_pos + T <= self.block_size, (
+            f"cache window {start_pos + T} exceeds block_size {self.block_size}"
+        )
+        pos = torch.arange(start_pos, start_pos + T, dtype=torch.long, device=idx.device)
+        x = self.drop(self.tok_emb(idx) + self.pos_emb(pos))
+        new_caches: list[tuple[torch.Tensor, torch.Tensor]] = []
+        for i, block in enumerate(self.blocks):
+            cache_i = None if kv_caches is None else kv_caches[i]
+            x, cache_i = block(x, kv_cache=cache_i, use_cache=True)
+            new_caches.append(cache_i)
+        x = self.ln_f(x)
+        return self.lm_head(x), new_caches
+
+    def _sample_next(
+        self,
+        logits_last: torch.Tensor,
+        temperature: float,
+        top_k: int | None,
+    ) -> torch.Tensor:
+        if temperature == 0.0:
+            return logits_last.argmax(dim=-1, keepdim=True)
+        logits = logits_last / temperature
+        if top_k is not None:
+            v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+            logits = logits.clone()
+            logits[logits < v[:, [-1]]] = float("-inf")
+        probs = F.softmax(logits, dim=-1)
+        return torch.multinomial(probs, num_samples=1)
+
+    def _generate_windowed(
+        self,
+        idx: torch.Tensor,
+        max_new_tokens: int,
+        temperature: float,
+        top_k: int | None,
+        eos_id: int | None,
+    ) -> torch.Tensor:
+        """Old path: full forward on the last block_size tokens every step.
+        Used once the sequence no longer fits the position table / cache."""
+        for _ in range(max_new_tokens):
+            idx_cond = idx if idx.size(1) <= self.block_size else idx[:, -self.block_size :]
+            logits, _ = self(idx_cond)
+            idx_next = self._sample_next(logits[:, -1, :], temperature, top_k)
+            idx = torch.cat((idx, idx_next), dim=1)
+            if eos_id is not None and (idx_next == eos_id).all():
+                break
+        return idx
+
     @torch.no_grad()
     def generate(
         self,
@@ -167,21 +259,34 @@ class TinyGPT(nn.Module):
         top_k: int | None = None,
         eos_id: int | None = None,
     ):
-        """eos_id: stop once every sequence in the batch has sampled it (real
-        early stopping, not just a soft bias) — max_new_tokens is still the
-        hard cap if eos_id is None or never sampled."""
-        for _ in range(max_new_tokens):
-            idx_cond = idx if idx.size(1) <= self.block_size else idx[:, -self.block_size :]
-            logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / temperature
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = float("-inf")
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
+        """Prefill the prompt once, then decode one token at a time with a
+        per-layer K/V cache. Falls back to the windowed full-forward if the
+        sequence would exceed block_size (learned pos_emb cannot grow, and
+        sliding the window would invalidate cached K/V).
+
+        eos_id: stop once every sequence in the batch has sampled it — 
+        max_new_tokens is still the hard cap if eos_id is None or never sampled.
+        temperature=0 is greedy (argmax), used by tests."""
+        prompt_len = idx.size(1)
+        if prompt_len >= self.block_size:
+            return self._generate_windowed(idx, max_new_tokens, temperature, top_k, eos_id)
+
+        logits, caches = self._forward_with_cache(idx, start_pos=0, kv_caches=None)
+        produced = 0
+        while produced < max_new_tokens:
+            idx_next = self._sample_next(logits[:, -1, :], temperature, top_k)
             idx = torch.cat((idx, idx_next), dim=1)
+            produced += 1
             if eos_id is not None and (idx_next == eos_id).all():
-                break
+                return idx
+            if idx.size(1) >= self.block_size:
+                remaining = max_new_tokens - produced
+                if remaining:
+                    idx = self._generate_windowed(idx, remaining, temperature, top_k, eos_id)
+                return idx
+            logits, caches = self._forward_with_cache(
+                idx[:, -1:], start_pos=idx.size(1) - 1, kv_caches=caches
+            )
         return idx
 
 
