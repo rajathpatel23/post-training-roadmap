@@ -60,6 +60,7 @@ class CachedAttention(nn.Module):
         self.q_linear = nn.Linear(d_model, d_model)
         self.k_linear = nn.Linear(d_model, d_model)
         self.v_linear = nn.Linear(d_model, d_model)
+        self.out_linear = nn.Linear(d_model, d_model)
 
     def _project(self, x):
         # Same weights for prefill (L tokens) and decode (1 token).
@@ -73,12 +74,12 @@ class CachedAttention(nn.Module):
         q, k, v = self._project(x)
         causal_mask = torch.tril(torch.ones(L, L, device=x.device))
         out = attention(q, k, v, mask=causal_mask)
-        return merge_heads(out), k, v
+        return self.out_linear(merge_heads(out)), k, v
 
     def decode(self, x_new, k_cache, v_cache):
         q_new, k_new, v_new = self._project(x_new)
         out, k_cache, v_cache = decode_step(q_new, k_new, v_new, k_cache, v_cache)
-        return merge_heads(out), k_cache, v_cache
+        return self.out_linear(merge_heads(out)), k_cache, v_cache
 
 
 if __name__ == "__main__":
@@ -89,7 +90,8 @@ if __name__ == "__main__":
     x_new = torch.randn(B, 1, D)
     x_full = torch.cat([x_prompt, x_new], dim=1)
 
-    # Prefill of the full sequence: last position is the "new" token.
+    # Prefill of the full sequence: last position is the "new" token
+    # x_full is the full sequence [B, L, D]
     out_full, k_full, v_full = layer.prefill(x_full)
 
     # Same last token, but via cache: prefill prompt, then decode one step.
