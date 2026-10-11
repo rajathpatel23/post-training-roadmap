@@ -1,0 +1,187 @@
+split,prompt,chosen,rejected,chosen_score,rejected_score
+train,MONTAGUE:,It is the king.,"It is nothing of his majesty; and leave to death: We say 'scape his hand that I do, and see your princely.",1.5,1.2
+train,MISTRESS OVERDONE:,"Sir, I must not not so, I am not well; but you go to help 'tis done.","No, a very noble fellow; and to-den, and have the way of him in a kind of the very well: I will not say it be.",1.5,0.6000000000000001
+train,SICINIUS:,"This is the cause, as he was the people and with us of the city?","Go, you?",1.5,0.5
+train,GENTLEMEN:,"Now, sir, let us think you do beseech you?",O!,1.5,-0.5
+train,Roman:,"How now, my lord?","What, shall have.",1.5,0.5
+train,PHILIP:,"If he, if I'll make some of good.","'enius'Tis but if you'll speak, is but I do you must think in us, To hear me more than your voices for this gentleman.",1.5,0.9
+train,NATHANIEL:,"What, will be the sun'en'd by our people.","Hark, my lord, I have you to her; But 'twere a little place: yet I can say 'tis an angry, and you may.",1.5,1.05
+train,COMINIUS:,Now do he had forgot your father for our daughter.,"The commonio oracle The gods bring you; let, or his name The people's the senate-morrow which I had I be contented.",1.5,1.35
+train,SOMERSET:,"Thou hast thou shalt, gentle lords, come to the name; And in the rest.","My lord, for the news, for the devil.",1.5,1.0
+train,HERMIONE:,"Sir, let you have no other.","Well, let them hear me know, for you be, and take the house of your mistress, Or my lord, And I say you had not for the devil.",1.5,0.30000000000000004
+train,ARIEL:,'Tis the maid?,"O, what, now!",1.5,0.5
+train,Both Tribunes:,Let us see me with one or the gods.,"Ay, but a poor prince, a poor and all these blood at your office, That he loves our father's hand.",1.5,1.0
+train,LUCIO:,You'll not hear a fellow.,"Marry, you well.",1.5,0.5
+train,BLUNT:,"I love the time, and then we will bear.","What, my lord?",1.5,0.5
+train,Third Citizen:,"You do beseech you, sir, you hear.","And I shall I'll do I have said my son I know I'll say you shall not yet to't, And he had it but a great Rome that ever, when ever will.",1.5,-0.2999999999999998
+train,Children:,"Why, what, that hath all my lordship in Norfolk.","Ay, but the queen or no hope of such a word; She is he did I am, And in a man's the cause to the king.",1.5,0.6000000000000001
+train,CORIOLANUS:,I'll follow you.,"Why, I know I know it me, O, I'll go by that you all.",1.5,1.0
+train,GONZALO:,I dare not to have a thing to the city.,"Nay, my lord.",1.5,0.5
+train,First Gentleman:,I must be not.,"Ay, in them.",1.5,0.5
+train,WARWICK:,"Why, I not my liege; and that would he did be no less.","What, then?",1.5,0.5
+train,CARDINAL:,"My lord, my lord?","That doth the queen that of my lord; We have been there, but my lord: And in the Duke of Norfolk didst be king, The king to the king hath heard of York.",1.5,-0.44999999999999996
+train,ABHORSON:,"Come, my mind, go to me: I have said for this business.","Nay, tell you are you, I, you to you.",1.5,0.5
+train,ABRAHAM:,"Why, God's the right, my lord; And I may be so long may not hear.","Well, my lord?",1.5,0.5
+train,BISHOP OF CARLISLE:,What is the house of thy mother'st a fool?,"A kind of heaven and a man, and let me be true; I have ever he shall not stand for his house.",1.5,1.2
+train,KING LEWIS XI:,"Why, thou make me, to-morrow, if thou wither, And then I thank you are he?","Ay, by this?",1.5,0.5
+train,DUKE OF YORK:,I will not so please me.,"Go, so, my father'st me.",1.5,0.5
+train,Second Officer:,Let the people do beseech you.,"O, if, a good sir, sir?",1.5,0.5
+train,Second Watchman:,And all this shall have given me to be so?,"Nay, but ever.",1.5,0.5
+train,FROTH:,"Let him, and my lords, I know; and have your highness to't.","O, you say: you, you are most enough, sir, sir; I will not.",1.5,0.5
+train,HERBERT:,"That's the cause, let us be of his face Is't; And so I will go with him to them.","I pray, do.",1.5,0.5
+train,VINCENTIO:,"Why, it not to this time!","Come, sirrah so.",1.5,0.5
+train,Third Conspirator:,"Nay, go to my father so; we pray you are most gracious master and do no matter.","I will not the business but so much abused the house of you but as well, I shall know but hear him from him, and a kind of all.",1.5,0.15000000000000013
+train,All Conspirators:,"He was a little man; he knew no; but one of himself, if I saw his tongue.","No, he comes, and so, you; and to-morrow.",1.5,0.5
+train,Pursuivant:,"Sir, sir; she will be a very well; I would not a thing for a month.","A lord, be it so, sir!",1.5,0.5
+train,LADY GREY:,"Who, 'tis away with anon.","I think you will I say you: I do beseech you have done a hundred years, he in the right than he shall not, And, when I love me to do.",1.5,-0.1499999999999999
+train,Huntsman:,"O, go, I would not, and I shall not stand.","O, no other.",1.5,0.5
+train,EMILIA:,"O, madam, but I am here we'll take away to see you like a month as it.","Ay, my lord!",1.5,0.5
+train,First Servant:,Thou hast no matter; therefore have you a man of this?,"But what was a man was ready of these, that hath sent out of your house of those that is an enemy a poor of your own.",1.5,-0.050000000000000044
+train,All:,"I know not, I have said their hats.","My lord, I thank thee gone; or my father's friend's royal queen: Who is a father to-morrow, And what doth she's wife, A villain!",1.5,0.9
+train,Senators:,How now!,"Fie, my lord!",1.5,0.5
+train,LORD BERKELEY:,I'll take it with thee like a happy.,"O Warwick, thy soul, Warwick, by the crown'd my cousin's death; Of Richard, and the king!",1.5,0.5
+train,CLAUDIO:,We are a king.,"Come, beheld!",1.5,0.5
+train,Tailor:,"'en-day, and therefore hear that will speak.","Why, then the king, my name?",1.5,0.5
+train,CURTIS:,"And I say you have rather not swear, I am his will not.","Why, all the Duke of Buckingham, The man that we should show of the time; With all the king's hand, That they might not call my lord.",1.5,-0.050000000000000044
+train,BRUTUS:,I know not have seen it so; I'll give my mistress: he comes with a little.,"What, is well?",1.5,0.5
+train,First Huntsman:,"He knows not hear his son, by that I'll call it not.","O, I have been a great, as thou woe, I'll bring me in this: yet that love he shall find; I have done a good and a woman.",1.5,-0.19999999999999996
+train,Scrivener:,I fear them in this.,"Well-morrow, what, are you?",1.5,0.5
+train,HORTENSIO:,"And he did me, I be a year; I say a fool and they come to my hands.","The news is not, that is it is as he, I live, sir, and my mother I might be revenged in.",1.5,1.35
+train,TRANIO:,"I'll make you; therefore, come too much, to have noblous.","We have ever made a kind of the world: And not his majesty, That's he will know not in Rome And not believe me, But they say his honour than the people.",1.5,-0.7999999999999998
+train,LADY ANNE:,"Why, I did make me not not to the world.",What hast thou art thou art thou hast a thousand of thy name?,1.5,0.0
+train,Shepherd:,The gods have you: for your generaline.,"Away, sir!",1.5,0.5
+train,RICHARD:,"I'll help thee, my lord.","Alas, then, madam, by my lord.",1.5,0.5
+train,MENENIUS:,I will not do: therefore think you're there come so to go.,What!,1.5,-0.5
+train,DUKE OF SURREY:,The king is good soul.,"O, as I know thyself; That Edward, if I know not yet to the Duke of York; But not be gone: I thought that, but love of Warwick's sake.",1.5,-0.34999999999999987
+train,Volsce:,"Sir, I am in that you'll be: I say you had a tall son.","O, well, then, sir, sir, we thank your worship, I will.",1.5,0.5
+train,First Conspirator:,"I will, sir, it not a friar.","Well, come.",1.5,0.5
+train,Third Messenger:,"I had rather have a devil, as you not, And make me, in this is.","Away, my lord.",1.5,0.5
+train,Third Servingman:,I should the doth not: when this we know't be the business.,"Ay, sir!",1.5,0.5
+train,CLEOMENES:,"I'll follow you, we have been as it.","A:I'll meet so, there have made a hundred days, The father, by my lord, And all an execution, But what is your grace so true.",1.5,0.75
+train,FRANCISCA:,"The Earl of York, and most noble man, To set the duke.",He shall be here; and most noble sir; I shall be no matter.,1.5,1.0
+train,ANGELO:,"My lord, for what is this same time is the world?","Sir, you will.",1.5,0.5
+train,GREMIO:,"The matter, I will be patient.","Nay, but a little good morrow, and my master, a noble lords, what I say that a father, I am so good.",1.5,1.2
+train,Clown:,"I'll come you to you, sir.","What, my lord?",1.5,0.5
+train,PAGE:,Where hath this is thy face?,"O, thou tell me, God'st thou art so, And thou to this I do me not thy name, To speak thy death.",1.5,1.2
+train,BIONDELLO:,What is no; but I had done!,"No, sir!",1.5,0.5
+train,First Soldier:,Nay it be: he is an hour and most well.,"So, my lord.",1.5,0.5
+train,Second Lady:,"Sirrah, then, what is not your father?","O, then, if you do do do not stay: I will not be patient.",1.5,1.0
+train,Justice:,"Why, what to the people?","My lord, it, by.",1.5,0.5
+train,LADY CAPULET:,"How now, my lord!","Nay, it, let'st thou wert well.",1.5,0.5
+train,FRIAR THOMAS:,"Nay, I will I hear well.","O, then?",1.5,0.5
+train,BRAKENBURY:,Hath never shall stay not in the head?,"How now, my lord, the Earl of Henry, Aumerle-night?",1.5,0.5
+train,Abbot:,"How hast sworn she says my lord, that she shall be ruled of it.","Away, in me: I had thou tell thee at his son For thou art a kind of Warwick'st: For thou hast broke thou art.",1.5,0.4
+train,Captain:,Why were so too many.,"My lord, good lord, your king, as my lord.",1.5,0.5
+train,BISHOP OF ELY:,"Why, my dear heart with a king.","What, will be, my lord?",1.5,0.5
+train,ANTONIO:,What is the matter?,"Why, I hope you, sir.",1.5,0.5
+train,Seventh Citizen:,"Here's not now, sir.","I can go with Rome, if the Volsces be a devil and as if he be so: I may be so: if a father, which is a hundred, as in't.",1.5,-0.5
+train,Lord Mayor:,"Hast thou hast thou hast, not thyself here, in Norfolk; By my royal princely to thy wife's thy blood?","No, sir, your grace.",1.5,0.5
+train,ARCHIDAMUS:,"I do not, sir: we'll prove a woman, and be a letter for, And yet that is a word.","Away, they are they are in this is too; and let's my tongue.",1.5,1.0
+train,CAPULET:,"What I have said, do it is here.","How now, thou art, the king?",1.5,0.5
+train,CALIBAN:,You are to the city of him.,"No, sir.",1.5,0.5
+train,Girl:,"I pray thee, I, and Warwick-morrow: I be the queen; And will not in them to thy eye.","Then may be patient, that did know no, though I was that, when it is my queen, as you are not have, And, to the ground we must become.",1.5,0.15000000000000013
+train,QUEEN:,That is this day and my Lord Angelo?,Thou'er.,1.5,-0.5
+train,Fourth Messenger:,"'Tis in night, to have I fear.","No, my lord.",1.5,0.5
+train,Lady:,"I will come: you are, sir.","Shepherd:O, goodly, goodly, in a part against him.",1.5,0.5
+train,DION:,I have not so.,"O, madam, I say.",1.5,0.5
+train,TYRREL:,"Why, I have, the truth can make it is this same.","But, then I hope of our brother and will show I'll swear If I do not give me in him; By this be gone, and your grace of all my daughter.",1.5,-0.1499999999999999
+train,Groom:,"Where is this is the day of France: What, then the sun was in the prince to their majesty.","I would have deserved my father nor that shall we should be: why, he will not have none that so, if it was a man had a woman to make him.",1.5,-0.1499999999999999
+train,JULIET:,"O, I say, if I'll not not hear me.","Who, that did you have ever thou make me but a word: But so soonest thou can, no less than I'll be so that thy mother was a devil.",1.5,0.15000000000000013
+train,First Servingman:,"Ay, and hear me, an old mistress, 'tis not yet I must not so.","Why, my lord!",1.5,0.5
+train,First Lord:,The air in the city loves and this way?,I hear it: he says the mostca; if you am but if he were a very man should wish our heads.,1.5,1.35
+train,First Roman:,"I did not, sir: and my lord.","Hail, my faith, not be so late: You have got her, as he, but that we shall not as he, For he is as he's head, And that I had been, For what you, The great him, he do not from the king.",1.5,-2.4499999999999997
+train,Second murderer:,"My brother, the good morrow, I have it is in.","How now, sweet, sir; I love!",1.5,0.5
+train,POMPEY:,"Prithee, do you not, and bring thee.","Ay, sir; if all my lord, if you have found your face in a bawd; 'gainst come to be a year and with you must be coming.",1.5,0.44999999999999996
+train,PETER:,I am it so: though my lord!,"Ay, the prince is, my lord.",1.5,0.5
+train,GEORGE:,How she shall he is at once from the sun.,"So now, madam, no man!",1.5,0.5
+train,JOHN OF GAUNT:,"Nay, I must be it as I should be a word, And, I will not thy words.",Fareland!,1.5,-0.5
+train,YORK:,"Alas, by my queen, gentle cousin, thou hast thou kill'd?","Now, here, if my lord.",1.5,0.5
+train,Second Murderer:,"So I have no; but a little man will I would be brief, And we say all the king.","Thou comest thou know, my noble lord; thou art thou shalt not speak it not so: If thou shalt stay.",1.5,1.0
+train,JOSEPH:,"Ay, we'll swear and I'll give me.","What, darest!",1.5,0.5
+train,ANTIGONUS:,"Do you know, you not speak: I will not have been the law of himself The house.","Ay, the senate-morrow.",1.5,0.5
+train,HASTINGS:,I'll come to his highness to take me.,"O, my liege!",1.5,0.5
+train,KATHARINA:,"Ay, let him with me in the world were anon?","I must please you, come to your highness, The way were you not do not have seen: let this is not go to be done.",1.5,0.75
+train,OXFORD:,And he will not my heart be; You are the house of the world.,"Is our dear Lord Hastings, and my father, And all his hands upon the king: We will stay from all of this in the right.",1.5,0.75
+train,NICHOLAS:,"I am well: I came, I may be; And what you have forgot, what, I would not have done.","Go, the cause!",1.5,0.5
+train,NORTHUMBERLAND:,"Ay, the prince may be the king.","What, my lord?",1.5,0.5
+train,Second Keeper:,"Nay, good lord, that I were well but that a subject.","Ay, how fares you, good night.",1.5,0.5
+train,BONA:,"Good queen, I thought of her?","Well, sir; I'll take my good my lord: I am a noble sir, I know you: I am ready; I'll give your son: the cause to speak, the queen.",1.5,-0.34999999999999987
+train,Nurse:,"I'll keep thee, good nurse: 'tis sweet father: we were a word.","We cannot give me: I do you to your highness: To hear us, good lord, I warrant him again and hear to save such.",1.5,0.9
+train,PARIS:,"Well, my lord, not, I pray thee a word, And learn to my gracious father.",To-day.,1.5,-0.5
+train,EXTON:,"You do good lord to be: for I'll be your highness, and will not have.","Now, here is the loss of him; he had made by his grace which I had no better: And make a holy in this day's eyes.",1.5,0.6000000000000001
+train,Third Gentleman:,"I know not to have not in one as you, sir; they are it is a poor words.","That's no; good sir, my lord, we are so, but my lord.",1.5,0.5
+train,STANLEY:,"I will I do not the prince of thee, let me stand to make haste.","What, I do't?",1.5,0.5
+train,Fifth Citizen:,"Not now, sir, I shouldst in you to your honour.","Good night, good!",1.5,0.5
+train,LORD FITZWATER:,I do not so much to be gone and for his head and when I would to-night.,"My gracious lord, we came to help; And do your crown to thy lord, Or I have you for our master is.",1.5,1.2
+train,Third Watchman:,Let's go with the people's wife.,"Tis not he did not for Rome, and that be a woman with thee as thou woe, And wouldst thou wast a kind of a woman.",1.5,0.6000000000000001
+train,ADRIAN:,"'Tush, what he is it?","Come, he is't.",1.5,0.5
+train,Second Patrician:,"I cannot tell me, for her in, I have a jilt.",I had rather not with your honour not with your grace; for you have no other.,1.5,0.0
+train,MAMILLIUS:,You do have more.,"Nay, my lord?",1.5,0.5
+train,ROMEO:,"Away, if thou thyself the doth he that: I'll bear my name of thy name?","O, but now!",1.5,0.5
+train,GARDENER:,"Where is my lord, thy heart is of York in all thy love?","But Warwick, are the king's death's sake: You would have been a word with my mind I; And shall not speak before his tongue.",1.5,0.9
+train,BUSHY:,Here's a gentleman?,"Then know the king, and your brother shall be, But yet you have been an officer of your mother, As you are too; And the city is.",1.5,0.44999999999999996
+train,Second Conspirator:,You are there.,"What, madam?",1.5,0.5
+train,DUKE VINCENTIO:,"Is it is a most lord, in my lie through the house.","I'll bring her to-morrow, sir; we think 'tis not your grace The people, To find him that you may be at.",1.5,1.35
+train,Second Senator:,No more!,"The duke's daughter he has he hath lost a very very good a year, sir, I mean to be too, he but if he shall be at the sun.",1.5,0.15000000000000013
+train,All The Lords:,You do not.,"Be patient, my lord, my lord, you must be not.",1.5,1.0
+train,LADY  CAPULET:,"O, do you both, and what, 'tis the man of the house of these oath?","Ay, madam; I'll tell me, but never yet I am for the crown; And I'll take it be revenged on, For you with you, But if my son we'll be the king.",1.5,-0.2999999999999998
+train,BIANCA:,Than I swear in a man and that's the cause?,I am not to-morrow: I am no more.,1.5,1.0
+train,All Citizens:,To you hear these sweet oracle!,"How now, if she have, when I am a word in love To send to me; I could hear your friends that will do.",1.5,0.9
+train,Priest:,Go on your majesty!,"My lord, my lord, for the truth of thy master's queen; I'll try it not to the cause: To stand to this same.",1.5,1.05
+train,BENVOLIO:,"By God, take up the truth; 'tis he does and the devil's dead.","No love, gentle brother; and I'll take my brother, That will not say what a most poor lord, Of their heads?",1.5,1.35
+train,RUTLAND:,"And I, that thou woe is not?","My lord, and, and let them.",1.5,0.5
+train,EARL OF SALISBURY:,"Now God's name, good my sovereign, and that Warwick, To see thy Lord Hastings'er's right his majesty.","Good Warwick, both!",1.5,0.5
+train,First Senator:,Away with them?,"O, good.",1.5,0.5
+train,Second Musician:,He is some of a little for honour.,"No, my good, my lord.",1.5,0.5
+train,Gardener:,O Clifford!,"Come, sir, 'twill have not so.",1.5,0.5
+train,Citizens:,I'll go to what I am.,"Pray, sir; I'll see that have a great peace To go with you; and by this business, in the people and have a word to the Capitol.",1.5,-0.050000000000000044
+train,First Messenger:,"'Tis as you, sir, my master is, my lord: I do't: to be dead.",I am no more than a man: and with the world of a fool; And I'll make her to make up.,1.5,1.35
+train,MERCUTIO:,"Let me, he must have to the Volsces.","This is the Capitol; and no other's to-night, that your country; And yet they know not bring him to make the business.",1.5,1.2
+train,Both:,"What says a happy as it, to your son?","What, sir?",1.5,0.5
+train,Second Lord:,What you are not?,Away.,1.5,-0.5
+train,Hostess:,You are but one half.,"Ay, no matter.",1.5,0.5
+train,ALL SERVING-MEN:,Thou art a man of your son; I shall not be seen.,"What may, I cannot go to be so; I will be, and have you for you that, as I was he shall stand so.",1.5,0.9
+train,Gaoler:,"O, how if you do not have he hath been so.","What, not so?",1.5,0.5
+train,Sheriff:,"Good Romeo, so late!","Hence, peace!",1.5,0.5
+train,KING RICHARD III:,"O, my liege, orisons I am a puissant too.",To me not be the stroke of it as to the stroke so much.,1.5,1.0
+train,Herald:,"What, are he does.","A man, sir!",1.5,0.5
+train,PAULINA:,Not a letter you will?,Whereon?,1.5,-0.5
+train,BALTHASAR:,Where the prince are so?,"Ay, sir, that have no more.",1.5,0.5
+train,KING RICHARD II:,To the world and Richard?,"Farewell, my lord, and my lord.",1.5,0.5
+train,Third Roman:,'Tis no more: I am as for I'll give.,"You do, it be revenged, and, not do.",1.5,0.5
+train,LADY MONTAGUE:,A little cause!,"Who is patient as you so, I live with me; And he's grace in this; Where is a jest to thy tongue to her from our hands.",1.5,0.44999999999999996
+train,Boatswain:,"Nay, but I saw your good good.","A word, sir.",1.5,0.5
+train,VOLUMNIA:,"I'll come, good cousin, but then well, and I would to take the court-place.","My lord, if you know not know not hear me to give me, to keep your voices, Which you have heard your own.",1.5,0.55
+train,THOMAS MOWBRAY:,"I think so, what can, by the state.","He is no hope, to thy life, And so near and, I can see it so, To take with what is a traitor, And so far in my face.",1.5,-0.34999999999999987
+train,EDWARD:,What my gracious lord?,"What, so, now I'll do.",1.5,0.5
+train,KING HENRY VI:,"Why, we shall die to say.","To me not, Warwick, and to a bawd; And all be satisfied; but Richard in thee for Richard; This is my brother's name of all this day.",1.5,0.44999999999999996
+train,GRUMIO:,"Well, I did you; I'll say to be.","You shall you have said, sir, and you have said, I hadst no harm as he so much.",1.5,0.0
+train,ISABELLA:,"I thank my brother: I do beseech you, Which you'll stand you.","Sir, my lord.",1.5,0.5
+train,"Senators, &C:","Sir, that will I am by the truth.","Nay, good!",1.5,0.5
+train,KATARINA:,"Godge, to the gods, and be glad there.","You are not thus it as I would have made your general; I'll tell your grace you: I'll be content your name: O, I'll go but yet to-night.",1.5,0.30000000000000004
+train,HENRY PERCY:,Where shall say I love from the loss?,"Who makes her from the day, for this, and a subject; And shall I shall not to my lord, And the king that the king and his brother that the king.",1.5,-1.15
+train,Citizen:,"I think, let this be revenged in mine, he came to-night.","Go, so, well-morrow, the world'st thou shalt have been at our blood of death; This is grown from her, As the king, But, the Tower.",1.5,0.75
+train,Second Gentleman:,"My lord, the doth do it will take thy heart.","I am a very cause to die to the people: that will not say you were the world, and not see him.",1.5,1.2
+train,SURREY:,"Good aunt, by thy father: I come, there is to make us.","Go, then; I be true.",1.5,0.5
+train,JOHN MORTIMER:,"O, gentle my noble and thou hast a holy grace!","I would have you had: I have you no cause where he will be here too, The good that I could have it be still been.",1.5,0.10000000000000009
+train,VIRGILIA:,"I say, sir, do it so long for 'twas a very hot.","O, sir, good, here'st thou speak.",1.5,0.5
+train,QUEEN ELIZABETH:,He will be ruled a happy like to take his face.,"O, I thank you, and what, what I know?",1.5,0.5
+train,Second Roman:,I think 'tis some.,Farewell.,1.5,-0.5
+eval,Servant:,"Why, you'll see your honour not give my lord?","Well, you now.",1.5,0.5
+eval,SEBASTIAN:,"I know it, sir; and be my noble than to the king?","O, my lord, I'll hear 'tis a man: that I will not so, I'll keep her you: For I have I will.",1.5,1.2
+eval,DUCHESS OF YORK:,"Go, and so longed, and hear me again.","My lord, how!",1.5,0.5
+eval,PETRUCHIO:,"Good lord, come, thou art thou not in this?","A man, sir, and you hear.",1.5,0.5
+eval,LOVEL:,"Why, if it have a man to this is.","O, thou art thyself, you, we must be patient.",1.5,0.5
+eval,DUKE OF AUMERLE:,"Well, come, do you; but come, and not stay in the rest of the crown.","O, I must not be: I be the king is not to the same like a word: My brother's in me to him.",1.5,1.05
+eval,Apothecary:,"I will be not my master, he do not.","By all this, sir, what, you might be too?",1.5,0.5
+eval,First Murderer:,"Ay, for his name should not; let me bear his heart.","Nay, I'll go to her; I can be the sun: and thou hast sworn to do me go: The king then, for our company.",1.5,0.9
+eval,MIRANDA:,"This is he, sir, we must do beseech you, nor of such a man.","That shall be done: When I do that he was a father, but as you would believe thee but else that the king of this of the business?",1.5,0.30000000000000004
+eval,Both Citizens:,The very many days in the king.,"No, then, I would you know it, sir, the people to-morrow.",1.5,0.5
+eval,First Musician:,"A little of love, so?","My lord, we are you, and not to the sun and myself: and have yet he knows not in the king.",1.5,1.35
+eval,Gentleman:,'Tis so we were to stand about it so late.,"But, good, I'll do well in the field And take the queen and, and by this is but but, To make some merry and I'll live to the king.",1.5,0.15000000000000013
+eval,Boy:,"'Tullus, he did, what is the king?","What may I am I did you, let it was this is as I am not.",1.5,1.0
+eval,Second Messenger:,"God prove a traitor that, I will be revenged of the head of our noble.","I will not to tell you, I will go; I'll have some.",1.5,1.0
+eval,Officer:,My hand will be at home.,"Goodly, good.",1.5,0.5
+eval,A Player:,This is too.,"Well, my lord, I will not that you have seen so far off; O, I know not see the sea for I will be thy head; With all.",1.5,-0.19999999999999996
+eval,GREEN:,My lord.,"What, may, my lord?",1.5,0.5
+eval,Time:,"The queen is full of men; that you were more we have as well, To make you of her.","O, by my wife and I will, if I say you may yield to-day, I thank thee to-day and your majesty.",1.5,1.35
