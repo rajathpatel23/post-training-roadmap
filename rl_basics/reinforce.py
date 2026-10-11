@@ -45,7 +45,7 @@ def debug_log_probs(tokenizer, completion_ids: torch.Tensor, token_log_probs: to
     print(f"  shapes: completion_ids={tuple(completion_ids.shape)}  token_log_probs={tuple(token_log_probs.shape)}")
     print("  first tokens:  idx  token             logπ(a|s)    p=exp(logπ)   read-as")
     for i in range(n):
-        p = float(token_log_probs[i].exp())
+        p = float(token_log_probs[i].detach().exp())
         if p > 0.40:
             read = "model already likes this"
         elif p > 0.05:
@@ -77,6 +77,37 @@ def debug_update(reward: float, seq_log_prob: torch.Tensor, sample_loss: torch.T
             print("  → better than batch mean → INCREASE P(this completion)")
         else:
             print("  → worse than batch mean → DECREASE P(this completion)")
+
+
+def debug_rescore(model, samples: list[dict]) -> None:
+    """Re-forward the SAME token ids after optimizer.step().
+
+    New samples would mix policy change with sampling noise. Frozen ids isolate the update.
+    weight > 0 should move Σlogπ up (less negative); weight < 0 should move it down.
+    """
+    print("\n  --- re-score SAME completions after step() ---")
+    print("  ΔΣlogπ > 0 means this completion got more likely under the new π.")
+    print("  tiny Δ is still a pass if the SIGN matches — clip/lr often shrink a huge raw grad.")
+    with torch.no_grad():
+        for i, sample in enumerate(samples):
+            _, seq_after = get_log_probs(model, sample["prompt_ids"], sample["completion_ids"])
+            before = sample["before"]
+            after = seq_after.item()
+            delta = after - before
+            weight = sample["weight"]
+            expected = "UP" if weight > 0 else ("DOWN" if weight < 0 else "FLAT")
+            if abs(delta) < 1e-8:
+                got = "FLAT"
+            elif delta > 0:
+                got = "UP"
+            else:
+                got = "DOWN"
+            match = "ok" if got == expected or expected == "FLAT" else "SIGN MISMATCH"
+            print(
+                f"  sample {i + 1}: weight={weight:+.3f}  "
+                f"Σlogπ {before:.3f} → {after:.3f}  Δ={delta:+.4f}  "
+                f"expected {expected}, got {got}  [{match}]"
+            )
 
 
 def load_policy(model_name: str= 'gpt2'):
@@ -223,6 +254,7 @@ def train_reinforce(n_episodes:int = 100, batch_size:int= 4, lr:float=1e-5, prom
 
         optimizer.zero_grad()
         batch_loss = torch.tensor(0.0)
+        scored = []
         for i, (prompt_ids, completion_ids, text, reward, parts) in enumerate(completion_data):
             token_log_probs, seq_log_probs = get_log_probs(model, prompt_ids, completion_ids)
 
@@ -238,6 +270,12 @@ def train_reinforce(n_episodes:int = 100, batch_size:int= 4, lr:float=1e-5, prom
             # └─────────────────────────────────────────────┘
             sample_loss = -(reward * seq_log_probs)
             batch_loss = batch_loss + sample_loss
+            scored.append({
+                "prompt_ids": prompt_ids,
+                "completion_ids": completion_ids,
+                "before": seq_log_probs.detach().item(),
+                "weight": reward,
+            })
             if _should_debug(episode):
                 print(f"\n  --- vanilla sample {i + 1}/{batch_size} ---")
                 debug_reward(text, parts)
@@ -254,6 +292,7 @@ def train_reinforce(n_episodes:int = 100, batch_size:int= 4, lr:float=1e-5, prom
             print(f"\n  batch loss={batch_loss.item():.3f}  grad_norm(before clip)={float(grad_norm):.3f}")
             print("  interpret: loss magnitude is NOT 'how wrong you are'. It is -(R · Σlogπ).")
             print("             watch Reward / Avg(10) to see if the policy is actually improving.")
+            debug_rescore(model, scored)
         # ─── LOGGING ───
         avg_reward = sum(episode_rewards) / len(episode_rewards)
         all_rewards.append(avg_reward)
@@ -317,6 +356,7 @@ def train_reinforce_with_baseline(n_episodes:int = 100, batch_size:int= 4, lr:fl
 
         optimizer.zero_grad()
         total_loss = torch.tensor(0.0)
+        scored = []
         for i, (prompt_ids, completion_ids, text, reward, parts) in enumerate(completion_data):
             token_log_probs, seq_log_probs = get_log_probs(model, prompt_ids, completion_ids)
             # ┌──────────────────────────────────────────────────┐
@@ -332,6 +372,12 @@ def train_reinforce_with_baseline(n_episodes:int = 100, batch_size:int= 4, lr:fl
             advantage = reward - baseline
             sample_loss = -advantage * seq_log_probs
             total_loss = total_loss + sample_loss
+            scored.append({
+                "prompt_ids": prompt_ids,
+                "completion_ids": completion_ids,
+                "before": seq_log_probs.detach().item(),
+                "weight": advantage,
+            })
             if _should_debug(episode):
                 print(f"\n  --- baseline sample {i + 1}/{batch_size} ---")
                 debug_reward(text, parts)
@@ -344,6 +390,7 @@ def train_reinforce_with_baseline(n_episodes:int = 100, batch_size:int= 4, lr:fl
         optimizer.step()
         if _should_debug(episode):
             print(f"\n  batch loss={total_loss.item():.3f}  grad_norm(before clip)={float(grad_norm):.3f}")
+            debug_rescore(model, scored)
         avg_reward = sum(episode_rewards) / len(episode_rewards)
         all_rewards.append(avg_reward)
         if (episode + 1) % 10 == 0:

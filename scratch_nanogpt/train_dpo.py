@@ -36,7 +36,7 @@ from config import DPOTrainConfig, load_dpo_train_config
 from dpo_bpe_data import iterate_epoch, load_jsonl, tokenize_examples
 from model import TinyGPT
 from sampling import sample_prompts, sample_prompts_multi
-from sft_bpe_data import IGNORE_INDEX
+from sequence_logprobs import sequence_logprobs
 
 from src.common.generation import resolve_lm_device
 from src.common.logging import finish_run, init_run, log_metrics, log_samples
@@ -52,20 +52,6 @@ SAMPLE_MAX_NEW_TOKENS = 80
 # diagnosis in reports/scratch_nanogpt.md) — draw this many per prompt
 # instead, both during training and for the final checkpoint.
 QUALITATIVE_SAMPLES_K = 3
-
-
-def sequence_logprobs(model, input_ids, labels, attention_mask):
-    """Sum of log p(token | context) over response positions only (labels
-    != IGNORE_INDEX) — the per-sequence quantity DPO's loss compares
-    between chosen/rejected and policy/reference."""
-    logits, _ = model(input_ids, key_padding_mask=attention_mask)
-    log_probs = F.log_softmax(logits, dim=-1)
-    mask = labels != IGNORE_INDEX
-    safe_labels = labels.clone()
-    safe_labels[~mask] = 0  # placeholder id — zeroed out below, value never used
-    token_logprobs = torch.gather(log_probs, 2, safe_labels.unsqueeze(-1)).squeeze(-1)
-    token_logprobs = token_logprobs * mask
-    return token_logprobs.sum(dim=1)
 
 
 def dpo_loss(policy_chosen, policy_rejected, ref_chosen, ref_rejected, beta: float):

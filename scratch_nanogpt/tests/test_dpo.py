@@ -6,7 +6,8 @@ heuristic, and train_dpo.py's loss/reward math.
 import torch
 
 from dpo_data import score_completion
-from train_dpo import dpo_loss, sequence_logprobs
+from sequence_logprobs import sequence_logprobs
+from train_dpo import dpo_loss
 from sft_bpe_data import IGNORE_INDEX
 
 
@@ -30,6 +31,28 @@ def test_score_penalizes_repeated_trigrams():
 
 def test_score_penalizes_degenerate_near_empty_text():
     assert score_completion("A real sentence here.", hit_eos=True) > score_completion(".", hit_eos=True)
+
+
+def test_register_beats_an_otherwise_matched_modern_line():
+    modern = score_completion("I am done with this talk.", hit_eos=True)
+    rewrite = score_completion("I am done with this talk, thou.", hit_eos=True)
+    assert rewrite > modern
+
+
+def test_repeated_marker_does_not_raise_the_register_credit():
+    from dpo_data import score_objectives
+
+    once = score_objectives("Thou hast done with this talk.", hit_eos=True)["register"]
+    stuffed = score_objectives("Thou thou thou hast done this thing.", hit_eos=True)["register"]
+    assert once == stuffed == 1.0
+
+
+def test_unknown_word_scores_below_a_known_line():
+    from dpo_data import score_objectives
+
+    known = score_objectives("Thou hast left the hall.", hit_eos=True)["words"]
+    fused = score_objectives("Thou hast battlege the hall.", hit_eos=True)["words"]
+    assert fused < known
 
 
 def test_dpo_loss_is_ln2_when_policy_equals_reference():

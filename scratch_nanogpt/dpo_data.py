@@ -18,10 +18,12 @@ Run:
 import json
 import os
 import random
+import re
 
 import torch
 
 from bpe_data import BPETokenizer
+from config import load_model_config
 from model import TinyGPT
 
 from src.common.generation import resolve_lm_device
@@ -31,15 +33,68 @@ SFT_CHECKPOINT = os.path.join(BASE_DIR, "out_sft_bpe", "tinygpt_sft.pt")
 SFT_TRAIN_PATH = os.path.join(BASE_DIR, "data", "sft", "train.jsonl")
 OUT_DIR = os.path.join(BASE_DIR, "data", "dpo")
 
-# Must match out_sft_bpe/'s architecture (gpt_small_bpe.yaml).
-MODEL_CFG = dict(block_size=256, n_layer=12, n_head=8, n_embd=128, dropout=0.1)
+# out_sft_bpe/tinygpt_sft.pt was trained as this architecture. The weights
+# file does not record the shape, so sampling reads the same yaml the
+# trainer uses.
+SFT_MODEL_CONFIG = "gpt_small_bpe"
 
 K_SAMPLES = 6  # bumped from 4 — more draws helps once the heuristic below is more graduated too
 MAX_NEW_TOKENS = 80
 
+# Closed-class markers only. A bonus that grows with every "thou" is a
+# verifier the policy can stuff. One distinct hit is the whole register
+# credit. Overlap with the movie line is not a term: it would pay the
+# model for copying modern wording, which is the opposite of the rewrite.
+REGISTER_MARKERS = frozenset({
+    "thee", "thou", "thy", "thine", "hath", "doth", "dost",
+    "prithee", "wherefore", "whilst", "naught",
+})
+OBJECTIVE_KEYS = ("form", "register", "words")
+_LEXICON: set[str] | None = None
+
+
+def _tokens(text: str) -> list[str]:
+    return re.findall(r"[A-Za-z']+", text.lower())
+
+
+def _lexicon() -> set[str]:
+    global _LEXICON
+    if _LEXICON is None:
+        from bpe_data import SHAKESPEARE_PATH
+
+        with open(SHAKESPEARE_PATH, encoding="utf-8") as f:
+            _LEXICON = set(_tokens(f.read()))
+    return _LEXICON
+
+
+def score_objectives(text: str, hit_eos: bool) -> dict[str, float]:
+    """Form, register, and real-word fraction, kept as separate numbers.
+    A single sum lets the widest-swinging check hide the others."""
+    return {
+        "form": _form_score(text, hit_eos),
+        "register": 1.0 if REGISTER_MARKERS.intersection(_tokens(text)) else 0.0,
+        "words": _known_word_fraction(text),
+    }
+
 
 def score_completion(text: str, hit_eos: bool) -> float:
-    """Higher = better. Rule-based — no LLM judge needed.
+    """One number for ranking a completion. DPO training does not call this.
+    The gold pairs are already written. This ranks samples when a preference
+    file is being built."""
+    parts = score_objectives(text, hit_eos)
+    return sum(parts[key] for key in OBJECTIVE_KEYS)
+
+
+def _known_word_fraction(text: str) -> float:
+    tokens = _tokens(text)
+    if not tokens:
+        return 0.0
+    known = _lexicon()
+    return sum(tok in known for tok in tokens) / len(tokens)
+
+
+def _form_score(text: str, hit_eos: bool) -> float:
+    """Higher = better shaped. Rule-based — no LLM judge needed.
 
     First version of this scored almost everything the same: SFT already
     solved "stop cleanly + end in punctuation" almost universally (see
@@ -109,7 +164,15 @@ def main():
     device = resolve_lm_device()
     tokenizer = BPETokenizer()
 
-    model = TinyGPT(vocab_size=tokenizer.vocab_size, **MODEL_CFG).to(device)
+    model_cfg = load_model_config(SFT_MODEL_CONFIG)
+    model = TinyGPT(
+        vocab_size=tokenizer.vocab_size,
+        block_size=model_cfg.block_size,
+        n_layer=model_cfg.n_layer,
+        n_head=model_cfg.n_head,
+        n_embd=model_cfg.n_embd,
+        dropout=model_cfg.dropout,
+    ).to(device)
     model.load_state_dict(torch.load(SFT_CHECKPOINT, map_location=device))
     print(f"loaded SFT checkpoint: {SFT_CHECKPOINT}")
 

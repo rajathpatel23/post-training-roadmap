@@ -62,6 +62,14 @@ EVAL_PROMPTS = ["ROMEO:", "MENENIUS:", "JULIET:", "KING RICHARD III:"]
 SAMPLE_MAX_NEW_TOKENS = 80  # SFT responses are one short sentence — no need for pretraining's 120-300 token cap
 
 
+def qualitative_prompts(cfg: SFTTrainConfig, eval_rows: list[dict]) -> list[str]:
+    """Speaker tags for the original SFT task. The style run sets
+    qualitative_prompt_count and samples held-out movie lines instead."""
+    if cfg.qualitative_prompt_count is None:
+        return EVAL_PROMPTS
+    return [row["prompt"] for row in eval_rows[: cfg.qualitative_prompt_count]]
+
+
 @torch.no_grad()
 def evaluate(model, tokenizer, eval_examples, block_size, batch_size, device):
     model.eval()
@@ -88,8 +96,10 @@ def main(config_path: str):
     os.makedirs(OUT_DIR, exist_ok=True)
 
     tokenizer = BPETokenizer()
+    eval_rows = load_jsonl(os.path.join(BASE_DIR, cfg.sft_eval_path))
     train_examples = tokenize_examples(tokenizer, load_jsonl(os.path.join(BASE_DIR, cfg.sft_train_path)), cfg.model.block_size)
-    eval_examples = tokenize_examples(tokenizer, load_jsonl(os.path.join(BASE_DIR, cfg.sft_eval_path)), cfg.model.block_size)
+    eval_examples = tokenize_examples(tokenizer, eval_rows, cfg.model.block_size)
+    prompts = qualitative_prompts(cfg, eval_rows)
     print(f"SFT data: {len(train_examples)} train, {len(eval_examples)} eval")
 
     def build_model():
@@ -111,7 +121,7 @@ def main(config_path: str):
     # to continue training, so this never silently becomes SFT-vs-SFT.
     base_model = build_model()
     base_model.load_state_dict(torch.load(reference_checkpoint, map_location=device))
-    base_samples = sample_prompts(base_model, tokenizer, EVAL_PROMPTS, device, max_new_tokens=SAMPLE_MAX_NEW_TOKENS)
+    base_samples = sample_prompts(base_model, tokenizer, prompts, device, max_new_tokens=SAMPLE_MAX_NEW_TOKENS)
     del base_model
 
     model = build_model()
@@ -153,7 +163,7 @@ def main(config_path: str):
                 history.append({"step": step, "epoch": epoch, "train_loss": loss.item(), "eval_loss": eval_loss, "elapsed_s": elapsed})
                 print(f"epoch {epoch} step {step}: train_loss={loss.item():.4f} eval_loss={eval_loss:.4f} ({elapsed:.0f}s)")
 
-                sft_samples = sample_prompts(model, tokenizer, EVAL_PROMPTS, device, max_new_tokens=SAMPLE_MAX_NEW_TOKENS)
+                sft_samples = sample_prompts(model, tokenizer, prompts, device, max_new_tokens=SAMPLE_MAX_NEW_TOKENS)
                 log_metrics(run, {"train/loss": loss.item(), "eval/loss": eval_loss, "elapsed_s": elapsed}, step=step)
                 log_samples(run, sft_samples, step=step, table_name="sft_samples")
 
@@ -177,7 +187,7 @@ def main(config_path: str):
             title=f"SFT on TinyGPT (bpe) — {n_params:,} params",
         )
 
-    final_samples = sample_prompts(model, tokenizer, EVAL_PROMPTS, device, max_new_tokens=SAMPLE_MAX_NEW_TOKENS)
+    final_samples = sample_prompts(model, tokenizer, prompts, device, max_new_tokens=SAMPLE_MAX_NEW_TOKENS)
     log_samples(run, final_samples, step=step, table_name="final_samples")
     finish_run(run)
 

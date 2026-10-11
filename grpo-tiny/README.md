@@ -78,7 +78,8 @@ Evaluate the checkpoint on held-out problems:
 ```bash
 python eval.py --ckpt runs/tiny/model.pt
 python eval.py --ckpt runs/tiny/model.pt --n 40   # quick check
-python eval.py --ckpt runs/tiny/model.pt --samples 8 --n 60  # adds pass@8
+python eval.py --ckpt runs/tiny/model.pt --n 40 --samples 8
+# prints greedy, majority@8, format-best@8, pass@8 (oracle)
 ```
 
 Logs: `runs/tiny/log.csv` has one row per step

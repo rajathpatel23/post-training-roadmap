@@ -20,10 +20,9 @@ in practice: slower per step (generation dominates), but the reward signal
 always reflects the policy actually being trained, not a snapshot from
 before training started.
 
-The policy-gradient step reuses the same "log-prob of the response given the
-prompt" quantity DPO's loss already isolates (sequence_logprobs, ported
-as-is from train_dpo.py) — just weighted by the group-relative advantage
-instead of compared against a DPO-style pairwise margin. A KL-to-reference
+The policy-gradient step reuses sequence_logprobs from sequence_logprobs.py
+— the same sum of response-token log-probs DPO compares — weighted by the
+group-relative advantage instead of a pairwise margin. A KL-to-reference
 term (same reference-model role DPO's frozen reference played) discourages
 drifting arbitrarily far from the DPO checkpoint while chasing reward.
 Simplification vs. textbook GRPO: the KL term here is a plain per-sequence
@@ -56,8 +55,8 @@ from config import GRPOTrainConfig, load_grpo_train_config
 from dpo_data import score_completion
 from model import TinyGPT
 from sampling import sample_prompts
+from sequence_logprobs import sequence_logprobs
 from sft_bpe_data import build_example, collate
-from train_dpo import sequence_logprobs
 
 from src.common.generation import resolve_lm_device
 from src.common.logging import finish_run, init_run, log_metrics, log_samples

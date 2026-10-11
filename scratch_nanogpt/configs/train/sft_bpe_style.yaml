@@ -1,0 +1,23 @@
+model_config: gpt_small_bpe
+
+# Shakespeare checkpoint, not the movie-continued one. The movie run overwrote
+# the register. Here the movie line is only in the prompt, and the loss is on
+# a Shakespeare rewrite of that line.
+init_from: out_bpe/tinygpt_shakespeare.pt
+
+sft_train_path: data/style_sft/train.jsonl
+sft_eval_path: data/style_sft/eval.jsonl
+output_dir: out_sft_style_bpe
+
+# First four held-out movie prompts, so the printed samples are rewrites
+# rather than the Romeo / Juliet speaker tags from the original SFT task.
+qualitative_prompt_count: 4
+
+batch_size: 16
+learning_rate: 5.0e-5
+num_epochs: 3
+eval_interval: 25
+seed: 1337
+
+wandb_project: nanogpt-shakespeare
+wandb_run_name: tinygpt-bpe-sft-style-v1

@@ -18,6 +18,7 @@ from config import (
     load_bert_train_config,
     load_dpo_train_config,
     load_gpt_train_config,
+    load_model_config,
     load_sft_train_config,
 )
 
@@ -48,7 +49,10 @@ def test_every_real_sft_config_loads(filename):
     assert cfg.model.tokenizer == "bpe"
 
 
-@pytest.mark.parametrize("filename", ["dpo_bpe.yaml", "dpo_bpe_gold.yaml", "dpo_bpe_gold_lowbeta.yaml"])
+@pytest.mark.parametrize(
+    "filename",
+    ["dpo_bpe.yaml", "dpo_bpe_gold.yaml", "dpo_bpe_gold_lowbeta.yaml", "dpo_bpe_gold_lowlr.yaml"],
+)
 def test_dpo_config_loads(filename):
     cfg = load_dpo_train_config(os.path.join(CONFIGS_DIR, filename))
     assert isinstance(cfg, DPOTrainConfig)
@@ -58,6 +62,25 @@ def test_dpo_config_loads(filename):
     # reference only) must be genuinely different checkpoints, or the
     # three-way comparison collapses to two-way.
     assert cfg.sft_checkpoint != cfg.pretrained_checkpoint
+
+
+def test_dpo_runs_use_the_model_the_sampler_loads():
+    """Pair-building reads gpt_small_bpe.yaml directly. Every DPO run config
+    must describe that same shape, or sampled pairs and training disagree."""
+    sampled = load_model_config("gpt_small_bpe")
+    assert sampled.n_layer == 12
+    assert sampled.n_head == 8
+    assert sampled.n_embd == 128
+    assert sampled.block_size == 256
+    assert sampled.tokenizer == "bpe"
+    for filename in (
+        "dpo_bpe.yaml",
+        "dpo_bpe_gold.yaml",
+        "dpo_bpe_gold_lowbeta.yaml",
+        "dpo_bpe_gold_lowlr.yaml",
+    ):
+        cfg = load_dpo_train_config(os.path.join(CONFIGS_DIR, filename))
+        assert cfg.model == sampled
 
 
 def test_dpo_gold_config_points_at_the_gold_dataset():

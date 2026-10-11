@@ -58,6 +58,18 @@ class ModelConfig:
     tokenizer: str = "char"  # "char" or "bpe" — only meaningful when type == "gpt"
 
 
+def load_model_config(name: str) -> ModelConfig:
+    """Load configs/model/<name>.yaml.
+
+    Training configs reach this file through `model_config:`. A script that
+    only samples an existing checkpoint needs the same shape and has no
+    training-run fields to load. The .pt file stores weights only.
+    """
+    path = os.path.join(CONFIGS_DIR, "model", f"{name}.yaml")
+    with open(path, encoding="utf-8") as f:
+        return ModelConfig(**yaml.safe_load(f))
+
+
 @dataclass(frozen=True)
 class GPTTrainConfig:
     """train.py — pretraining or continued pretraining of TinyGPT."""
@@ -125,6 +137,10 @@ class SFTTrainConfig:
     reference_checkpoint: Optional[str] = None  # defaults to init_from — see train_sft.py
     continue_history: bool = False
     output_dir: Optional[str] = None
+    # When set, qualitative samples use the first N prompts from the eval
+    # JSONL instead of the Shakespeare speaker tags. The style run needs
+    # this: those tags never show a movie line being rewritten.
+    qualitative_prompt_count: Optional[int] = None
 
 
 def load_sft_train_config(path: str) -> SFTTrainConfig:

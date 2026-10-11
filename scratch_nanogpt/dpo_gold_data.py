@@ -68,7 +68,8 @@ import time
 import torch
 
 from bpe_data import BPETokenizer
-from dpo_data import sample_k
+from config import load_model_config
+from dpo_data import SFT_MODEL_CONFIG, sample_k
 from model import TinyGPT
 
 from src.common.generation import resolve_lm_device
@@ -78,9 +79,6 @@ SFT_CHECKPOINT = os.path.join(BASE_DIR, "out_sft_bpe", "tinygpt_sft.pt")
 SFT_TRAIN_PATH = os.path.join(BASE_DIR, "data", "sft", "train.jsonl")
 OUT_DIR = os.path.join(BASE_DIR, "data", "dpo_gold")
 GOLD_CACHE_PATH = os.path.join(OUT_DIR, "gold_completions.jsonl")
-
-# Must match out_sft_bpe/'s architecture (gpt_small_bpe.yaml).
-MODEL_CFG = dict(block_size=256, n_layer=12, n_head=8, n_embd=128, dropout=0.1)
 
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"  # cheap, more than capable for this
 MAX_OUTPUT_TOKENS = 60
@@ -268,7 +266,15 @@ def generate_gold_completions_batch(
 def build_pairs(prompts: list[str], gold: dict[str, list[str]], k_rejected: int) -> list[dict]:
     device = resolve_lm_device()
     tokenizer = BPETokenizer()
-    sft_model = TinyGPT(vocab_size=tokenizer.vocab_size, **MODEL_CFG).to(device)
+    model_cfg = load_model_config(SFT_MODEL_CONFIG)
+    sft_model = TinyGPT(
+        vocab_size=tokenizer.vocab_size,
+        block_size=model_cfg.block_size,
+        n_layer=model_cfg.n_layer,
+        n_head=model_cfg.n_head,
+        n_embd=model_cfg.n_embd,
+        dropout=model_cfg.dropout,
+    ).to(device)
     sft_model.load_state_dict(torch.load(SFT_CHECKPOINT, map_location=device))
 
     pairs = []
