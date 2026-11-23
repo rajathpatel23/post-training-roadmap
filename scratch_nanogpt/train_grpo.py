@@ -1,7 +1,11 @@
 """
-GRPO: RL-style optimization on top of the working DPO checkpoint, using the
+GRPO: RL-style optimization branched from the SFT checkpoint, using the
 same rule-based well-formedness heuristic (score_completion, from
 dpo_data.py) as a verifiable reward — no learned reward model, no LLM judge.
+
+Why branch from SFT (not stack on DPO): the blog arc treats DPO and GRPO as
+two ways to improve an SFT model — preferences offline vs live reward on
+policy samples — so both should share the same parent checkpoint.
 
 Group Relative Policy Optimization, in the form used here: for each prompt,
 sample a *group* of K completions live from the current policy, score each
@@ -11,32 +15,22 @@ function/critic. That's the "relative" in GRPO — no critic to train, no
 separate value network, at the cost of needing several live samples per
 prompt per step instead of one.
 
-This is also the central way GRPO differs from DPO mechanically, not just
-mathematically: DPO trained over a *static* preference dataset built once
-(dpo_data.py, run offline, many epochs over the same fixed pairs). GRPO has
-no such dataset — every step samples fresh completions from whatever the
-policy currently is, scores them, and updates. That's what "on-policy" means
-in practice: slower per step (generation dominates), but the reward signal
-always reflects the policy actually being trained, not a snapshot from
-before training started.
+Central mechanical difference from DPO: DPO trains over a *static* preference
+dataset built once (offline, many epochs over fixed pairs). GRPO has no such
+dataset — every step samples fresh completions from the current policy,
+scores them, and updates. On-policy: slower per step (generation dominates),
+but the reward always reflects the policy being trained.
 
-The policy-gradient step reuses sequence_logprobs from sequence_logprobs.py
-— the same sum of response-token log-probs DPO compares — weighted by the
-group-relative advantage instead of a pairwise margin. A KL-to-reference
-term (same reference-model role DPO's frozen reference played) discourages
-drifting arbitrarily far from the DPO checkpoint while chasing reward.
-Simplification vs. textbook GRPO: the KL term here is a plain per-sequence
-log-prob difference (policy - reference), not the exponentiated low-variance
-k3 estimator — at ~80 generated tokens per response, summed log-prob gaps
-are large enough that exponentiating them risks overflow for a toy model at
-this scale. Worth revisiting if this KL term turns out to matter a lot.
+The policy-gradient step reuses sequence_logprobs with reduction="mean"
+(length-normalized) weighted by group-relative advantage. DPO keeps the
+default sum — same tokens, different aggregation, so long replies don't
+dominate GRPO's gradient. KL is the mean log-prob gap vs frozen SFT.
+Simplification vs. textbook GRPO: no k3 estimator; mu=1 so no π_new/π_old
+clip yet.
 
-Explicit carry-forward from the DPO debugging arc (reports/scratch_nanogpt.md):
-DPO's sequence-summed loss needed a 10x lower learning rate than SFT's
-per-token-mean loss at the same nominal lr. GRPO's loss has yet another shape
-(advantage-weighted log-prob sum) — don't assume any prior lr ports safely;
-watch gradient magnitude vs. loss curve shape early in the run before
-trusting it.
+Carry-forward from the DPO debugging arc: sequence-summed / advantage-
+weighted losses need a lower lr than SFT's per-token-mean loss. Watch
+gradient magnitude vs. loss shape early before trusting the lr.
 
 Run:
     python train_grpo.py --config configs/train/grpo_bpe.yaml
@@ -107,6 +101,21 @@ def group_advantages(rewards: torch.Tensor, eps: float = GROUP_ADV_EPS) -> torch
     return (rewards - mean) / (std + eps)
 
 
+def append_generations(path: str, step: int, stage: str, rows: list[dict]) -> None:
+    """Append eval/comparison samples to a local jsonl for blog visibility
+    (W&B tables alone are awkward to cite). One file, `stage` discriminates
+    pretrained/sft/dpo/grpo — reopen and filter rather than juggling paths."""
+    with open(path, "a", encoding="utf-8") as f:
+        for row in rows:
+            f.write(
+                json.dumps(
+                    {"step": step, "stage": stage, "prompt": row["prompt"], "output": row["output"]},
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+
 def main(config_path: str):
     cfg: GRPOTrainConfig = load_grpo_train_config(config_path)
     assert cfg.model.type == "gpt" and cfg.model.tokenizer == "bpe", "train_grpo.py expects a bpe gpt model config"
@@ -158,19 +167,18 @@ def main(config_path: str):
     # played: an anchor the KL term keeps the policy from drifting too far
     # from, not a target being optimized toward.
     reference = build_model()
-    reference.load_state_dict(torch.load(dpo_checkpoint, map_location=device))
+    reference.load_state_dict(torch.load(sft_checkpoint, map_location=device))
     reference.eval()
     for p in reference.parameters():
         p.requires_grad_(False)
 
-    # Policy — the model actually being trained, init'd from the same DPO
-    # checkpoint. Continuing the chain: does RL-style optimization improve
-    # further on top of what DPO already got, using the same reward signal?
+    # Policy — trainable; init from SFT so GRPO and DPO are siblings under
+    # the same parent rather than stacking GRPO on DPO.
     policy = build_model()
-    policy.load_state_dict(torch.load(dpo_checkpoint, map_location=device))
+    policy.load_state_dict(torch.load(sft_checkpoint, map_location=device))
 
     n_params = sum(p.numel() for p in policy.parameters())
-    print(f"training from: {dpo_checkpoint}  (group_size={cfg.group_size}, kl_coef={cfg.kl_coef})")
+    print(f"training from: {sft_checkpoint}  (group_size={cfg.group_size}, kl_coef={cfg.kl_coef})")
 
     optimizer = torch.optim.AdamW(policy.parameters(), lr=cfg.learning_rate)
 
@@ -190,6 +198,13 @@ def main(config_path: str):
     log_samples(run, pretrained_samples, step=0, table_name="pretrained_samples", columns=SAMPLE_COLUMNS)
     log_samples(run, sft_samples, step=0, table_name="sft_samples", columns=SAMPLE_COLUMNS)
     log_samples(run, dpo_samples, step=0, table_name="dpo_samples", columns=SAMPLE_COLUMNS)
+
+    generations_path = os.path.join(OUT_DIR, "generations.jsonl")
+    # Fresh file each run (output_dir is overwritten by design for this recipe).
+    open(generations_path, "w", encoding="utf-8").close()
+    append_generations(generations_path, step=0, stage="pretrained", rows=pretrained_samples)
+    append_generations(generations_path, step=0, stage="sft", rows=sft_samples)
+    append_generations(generations_path, step=0, stage="dpo", rows=dpo_samples)
 
     history = []
     step = 0
@@ -218,9 +233,13 @@ def main(config_path: str):
 
             input_ids, labels, attention_mask = collate(tokenizer, examples, cfg.model.block_size, device)
 
-            policy_logprob = sequence_logprobs(policy, input_ids, labels, attention_mask)
+            # mean (not sum): length-normalize so a 40-token reply doesn't get
+            # ~4x the gradient of a 10-token one with the same per-token quality.
+            policy_logprob = sequence_logprobs(policy, input_ids, labels, attention_mask, reduction="mean")
             with torch.no_grad():
-                ref_logprob = sequence_logprobs(reference, input_ids, labels, attention_mask)
+                ref_logprob = sequence_logprobs(
+                    reference, input_ids, labels, attention_mask, reduction="mean"
+                )
 
             # Policy gradient step: push up the log-prob of completions this
             # group scored above its own average, push down the ones scored
@@ -291,6 +310,7 @@ def main(config_path: str):
                 print(f"  --- sample outputs @ step {step} ---")
                 for row in eval_samples:
                     print(f"  {row['prompt']!r} -> {row['output']!r}")
+                append_generations(generations_path, step=step, stage="grpo", rows=eval_samples)
 
                 torch.save(policy.state_dict(), os.path.join(CHECKPOINTS_DIR, f"step_{step}.pt"))
 
@@ -330,6 +350,7 @@ def main(config_path: str):
 
     final_samples = sample_prompts(policy, tokenizer, EVAL_PROMPTS, device, max_new_tokens=80)
     log_samples(run, final_samples, step=step, table_name="final_samples", columns=SAMPLE_COLUMNS)
+    append_generations(generations_path, step=step, stage="grpo", rows=final_samples)
     finish_run(run)
 
     print("\n--- base pretrained vs SFT vs DPO vs GRPO, same prompts ---")
@@ -339,6 +360,7 @@ def main(config_path: str):
         print(f"  sft:        {sft['output']!r}")
         print(f"  dpo:        {dpo['output']!r}")
         print(f"  grpo:       {grpo['output']!r}")
+    print(f"\ngenerations -> {generations_path}")
 
 
 if __name__ == "__main__":

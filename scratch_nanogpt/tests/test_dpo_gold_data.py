@@ -62,25 +62,7 @@ def test_pending_tasks_empty_when_every_prompt_already_at_target():
 
 def _patch_sft_infra(monkeypatch, sample_fn):
     monkeypatch.setattr(dgd, "sample_k", sample_fn)
-    monkeypatch.setattr(dgd, "resolve_lm_device", lambda: "cpu")
-
-    class FakeTokenizer:
-        vocab_size = 10
-
-        def encode(self, s):
-            return [1, 2, 3]
-
-    monkeypatch.setattr(dgd, "BPETokenizer", FakeTokenizer)
-
-    class FakeModel:
-        def to(self, device):
-            return self
-
-        def load_state_dict(self, state_dict):
-            pass
-
-    monkeypatch.setattr(dgd, "TinyGPT", lambda **kwargs: FakeModel())
-    monkeypatch.setattr(dgd.torch, "load", lambda *a, **k: {})
+    monkeypatch.setattr(dgd, "load_sft_sampler", lambda: (object(), object(), "cpu"))
 
 
 def test_build_pairs_skips_prompts_missing_gold_completions(monkeypatch):

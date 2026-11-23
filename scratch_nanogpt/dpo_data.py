@@ -38,6 +38,11 @@ OUT_DIR = os.path.join(BASE_DIR, "data", "dpo")
 # trainer uses.
 SFT_MODEL_CONFIG = "gpt_small_bpe"
 
+# Both preference files are cut from this prompt list with the same holdout,
+# so a prompt cannot land in train for one run and eval for the other.
+SPLIT_SEED = 1337
+VAL_FRACTION = 0.1
+
 K_SAMPLES = 6  # bumped from 4 — more draws helps once the heuristic below is more graduated too
 MAX_NEW_TOKENS = 80
 
@@ -121,10 +126,13 @@ def _form_score(text: str, hit_eos: bool) -> float:
     words = stripped.split()
     n_words = len(words)
 
-    if n_words < 2:
-        score -= 2.0  # degenerate / near-empty
-    elif n_words > 20:
-        score -= 0.15 * (n_words - 20)  # graduated penalty for excessive rambling length
+    # Prefer a mid-length band (roughly one short dialogue line). Outside it,
+    # graduate the penalty so GRPO can't farm EOS+punct with "Thy!" or ramble.
+    band_lo, band_hi = 6, 16
+    if n_words < band_lo:
+        score -= 0.4 * (band_lo - n_words)
+    elif n_words > band_hi:
+        score -= 0.15 * (n_words - band_hi)
 
     # Bigram + trigram repetition (not trigram-only) — catches shorter loops
     # like "thou hast thou hast" that a trigram-only check would miss.
@@ -160,10 +168,14 @@ def sample_k(model, tokenizer, prompt: str, k: int, device: str, max_new_tokens:
     return completions
 
 
-def main():
+def load_sft_sampler():
+    """Rebuild the supervised checkpoint both preference builders sample from.
+
+    Returns (model, tokenizer, device). The shape comes from SFT_MODEL_CONFIG;
+    the weights come from SFT_CHECKPOINT.
+    """
     device = resolve_lm_device()
     tokenizer = BPETokenizer()
-
     model_cfg = load_model_config(SFT_MODEL_CONFIG)
     model = TinyGPT(
         vocab_size=tokenizer.vocab_size,
@@ -174,10 +186,47 @@ def main():
         dropout=model_cfg.dropout,
     ).to(device)
     model.load_state_dict(torch.load(SFT_CHECKPOINT, map_location=device))
+    return model, tokenizer, device
+
+
+def load_sft_prompts() -> list[str]:
+    """Unique speaker tags from the SFT training split, in a stable order."""
+    with open(SFT_TRAIN_PATH, encoding="utf-8") as f:
+        return sorted({json.loads(line)["prompt"] for line in f})
+
+
+def write_preference_split(
+    pairs: list[dict],
+    out_dir: str,
+    seed: int = SPLIT_SEED,
+    val_fraction: float = VAL_FRACTION,
+) -> tuple[list[dict], list[dict]]:
+    """Hold out val_fraction of pairs and write train.jsonl and eval.jsonl.
+
+    Shuffles a copy, so the caller's list stays in its original order. The
+    same seed and fraction are what produced the files the blog's runs used.
+    """
+    ordered = pairs.copy()
+    random.seed(seed)
+    random.shuffle(ordered)
+    n_val = max(1, int(len(ordered) * val_fraction))
+    val_pairs, train_pairs = ordered[:n_val], ordered[n_val:]
+
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "train.jsonl"), "w") as f:
+        for pair in train_pairs:
+            f.write(json.dumps(pair) + "\n")
+    with open(os.path.join(out_dir, "eval.jsonl"), "w") as f:
+        for pair in val_pairs:
+            f.write(json.dumps(pair) + "\n")
+    return train_pairs, val_pairs
+
+
+def main():
+    model, tokenizer, device = load_sft_sampler()
     print(f"loaded SFT checkpoint: {SFT_CHECKPOINT}")
 
-    with open(SFT_TRAIN_PATH, encoding="utf-8") as f:
-        prompts = sorted({json.loads(line)["prompt"] for line in f})
+    prompts = load_sft_prompts()
     print(f"{len(prompts)} unique prompts")
 
     pairs = []
@@ -208,19 +257,7 @@ def main():
         f"({skipped_no_separation} prompts skipped — no score separation among {K_SAMPLES} samples)"
     )
 
-    random.seed(1337)
-    random.shuffle(pairs)
-    n_val = max(1, int(len(pairs) * 0.1))
-    val_pairs, train_pairs = pairs[:n_val], pairs[n_val:]
-
-    os.makedirs(OUT_DIR, exist_ok=True)
-    with open(os.path.join(OUT_DIR, "train.jsonl"), "w") as f:
-        for p in train_pairs:
-            f.write(json.dumps(p) + "\n")
-    with open(os.path.join(OUT_DIR, "eval.jsonl"), "w") as f:
-        for p in val_pairs:
-            f.write(json.dumps(p) + "\n")
-
+    train_pairs, val_pairs = write_preference_split(pairs, OUT_DIR)
     print(f"train: {len(train_pairs)}  eval: {len(val_pairs)}  -> {OUT_DIR}/")
 
     print("\n--- 15 random pairs for manual inspection ---")

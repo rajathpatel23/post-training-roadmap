@@ -65,18 +65,9 @@ import os
 import random
 import time
 
-import torch
-
-from bpe_data import BPETokenizer
-from config import load_model_config
-from dpo_data import SFT_MODEL_CONFIG, sample_k
-from model import TinyGPT
-
-from src.common.generation import resolve_lm_device
+from dpo_data import load_sft_prompts, load_sft_sampler, sample_k, write_preference_split
 
 BASE_DIR = os.path.dirname(__file__)
-SFT_CHECKPOINT = os.path.join(BASE_DIR, "out_sft_bpe", "tinygpt_sft.pt")
-SFT_TRAIN_PATH = os.path.join(BASE_DIR, "data", "sft", "train.jsonl")
 OUT_DIR = os.path.join(BASE_DIR, "data", "dpo_gold")
 GOLD_CACHE_PATH = os.path.join(OUT_DIR, "gold_completions.jsonl")
 
@@ -264,18 +255,7 @@ def generate_gold_completions_batch(
 
 
 def build_pairs(prompts: list[str], gold: dict[str, list[str]], k_rejected: int) -> list[dict]:
-    device = resolve_lm_device()
-    tokenizer = BPETokenizer()
-    model_cfg = load_model_config(SFT_MODEL_CONFIG)
-    sft_model = TinyGPT(
-        vocab_size=tokenizer.vocab_size,
-        block_size=model_cfg.block_size,
-        n_layer=model_cfg.n_layer,
-        n_head=model_cfg.n_head,
-        n_embd=model_cfg.n_embd,
-        dropout=model_cfg.dropout,
-    ).to(device)
-    sft_model.load_state_dict(torch.load(SFT_CHECKPOINT, map_location=device))
+    sft_model, tokenizer, device = load_sft_sampler()
 
     pairs = []
     for prompt in prompts:
@@ -302,8 +282,7 @@ def main():
     parser.add_argument("--poll-interval", type=float, default=10.0, help="Seconds between batch status polls (--batch only)")
     args = parser.parse_args()
 
-    with open(SFT_TRAIN_PATH, encoding="utf-8") as f:
-        prompts = sorted({json.loads(line)["prompt"] for line in f})
+    prompts = load_sft_prompts()
 
     cached = load_cached_gold()
     tasks = _pending_tasks(prompts, cached, args.variants_per_prompt)
@@ -329,18 +308,7 @@ def main():
     pairs = build_pairs(prompts, gold, args.k_rejected)
     print(f"built {len(pairs)} pairs from {n_completions} gold completions x up to {args.k_rejected} SFT samples each")
 
-    random.seed(1337)
-    random.shuffle(pairs)
-    n_val = max(1, int(len(pairs) * 0.1))
-    val_pairs, train_pairs = pairs[:n_val], pairs[n_val:]
-
-    with open(os.path.join(OUT_DIR, "train.jsonl"), "w") as f:
-        for p in train_pairs:
-            f.write(json.dumps(p) + "\n")
-    with open(os.path.join(OUT_DIR, "eval.jsonl"), "w") as f:
-        for p in val_pairs:
-            f.write(json.dumps(p) + "\n")
-
+    train_pairs, val_pairs = write_preference_split(pairs, OUT_DIR)
     print(f"train: {len(train_pairs)}  eval: {len(val_pairs)}  -> {OUT_DIR}/")
 
     print("\n--- 10 random pairs for manual inspection ---")

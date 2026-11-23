@@ -186,26 +186,26 @@ def load_dpo_train_config(path: str) -> DPOTrainConfig:
 
 @dataclass(frozen=True)
 class GRPOTrainConfig:
-    """train_grpo.py — GRPO on top of the working DPO checkpoint.
+    """train_grpo.py — GRPO branched from the SFT checkpoint.
 
-    dpo_checkpoint initializes *both* the trainable policy and the frozen
-    reference (KL anchor) — same "one checkpoint, two roles" setup DPO used
-    with sft_checkpoint, one level further down the chain. pretrained/sft
-    checkpoints are unrelated to training, only used to extend the
-    qualitative comparison to four stages (pretrained -> SFT -> DPO -> GRPO)
-    instead of DPO's three.
+    sft_checkpoint initializes *both* the trainable policy and the frozen
+    reference (KL anchor) — same "one checkpoint, two roles" setup DPO used,
+    but branching from SFT so GRPO and DPO are siblings under the same parent
+    rather than stacking GRPO on top of DPO.
 
-    No dpo_train_path/dpo_eval_path equivalent here: GRPO has no static
-    preference dataset, it samples live from the policy every step. prompts_path
-    plays the role DPO's *_path pair played, but it's just a prompt list
-    (reused from the same SFT prompt set dpo_data.py drew from), not
-    precomputed (prompt, chosen, rejected) triples.
+    pretrained_checkpoint / dpo_checkpoint are unrelated to training: only used
+    for the qualitative comparison (pretrained -> SFT -> GRPO, with DPO kept as
+    a sibling baseline on the same prompts).
+
+    No static preference dataset: GRPO samples live from the policy every step.
+    prompts_path is just a prompt list (same SFT prompt set), not
+    (prompt, chosen, rejected) triples.
     """
 
     model: ModelConfig
-    dpo_checkpoint: str
     sft_checkpoint: str
     pretrained_checkpoint: str
+    dpo_checkpoint: str  # sibling baseline for qualitative comparison only
     prompts_path: str
     eval_prompts_path: str
     group_size: int

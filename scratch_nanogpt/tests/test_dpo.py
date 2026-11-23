@@ -3,9 +3,11 @@ Tests for the DPO-specific pieces: dpo_data.py's rule-based scoring
 heuristic, and train_dpo.py's loss/reward math.
 """
 
+import json
+
 import torch
 
-from dpo_data import score_completion
+from dpo_data import score_completion, write_preference_split
 from sequence_logprobs import sequence_logprobs
 from train_dpo import dpo_loss
 from sft_bpe_data import IGNORE_INDEX
@@ -31,6 +33,13 @@ def test_score_penalizes_repeated_trigrams():
 
 def test_score_penalizes_degenerate_near_empty_text():
     assert score_completion("A real sentence here.", hit_eos=True) > score_completion(".", hit_eos=True)
+
+
+def test_score_prefers_mid_length_band_over_very_short():
+    # 6–16 word band: a one-line reply should beat "Thy!"-style collapse.
+    mid = "I will not be gone, and see the king today."
+    short = "Thy!"
+    assert score_completion(mid, hit_eos=True) > score_completion(short, hit_eos=True)
 
 
 def test_register_beats_an_otherwise_matched_modern_line():
@@ -126,3 +135,31 @@ def test_sequence_logprobs_ignores_masked_positions():
     logprob_two_targets = sequence_logprobs(model, input_ids, labels_two_targets, attention_mask)
 
     assert logprob_two_targets.item() < logprob_one_target.item()
+
+    # mean: two equally-likely response tokens → same per-token value as one.
+    labels_two_good = torch.tensor([[1, IGNORE_INDEX, 1]])
+    sum_two = sequence_logprobs(model, input_ids, labels_two_good, attention_mask, reduction="sum")
+    mean_two = sequence_logprobs(model, input_ids, labels_two_good, attention_mask, reduction="mean")
+    mean_one = sequence_logprobs(model, input_ids, labels_one_real_target, attention_mask, reduction="mean")
+    assert abs(mean_two.item() - mean_one.item()) < 1e-5
+    assert abs(sum_two.item() - 2 * mean_two.item()) < 1e-5
+
+
+def test_preference_split_holds_out_ten_percent_and_is_stable(tmp_path):
+    pairs = [{"prompt": f"SPEAKER {i}:", "chosen": "a", "rejected": "b"} for i in range(100)]
+    original = [dict(p) for p in pairs]
+
+    train_pairs, val_pairs = write_preference_split(pairs, tmp_path)
+    again_train, again_val = write_preference_split(pairs, tmp_path)
+
+    assert pairs == original
+    assert len(val_pairs) == 10
+    assert len(train_pairs) == 90
+    assert train_pairs == again_train
+    assert val_pairs == again_val
+    assert {p["prompt"] for p in train_pairs}.isdisjoint({p["prompt"] for p in val_pairs})
+
+    written_train = [json.loads(line) for line in (tmp_path / "train.jsonl").read_text().splitlines()]
+    written_val = [json.loads(line) for line in (tmp_path / "eval.jsonl").read_text().splitlines()]
+    assert written_train == train_pairs
+    assert written_val == val_pairs
