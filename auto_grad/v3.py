@@ -1,5 +1,9 @@
 import numpy as np
 
+import torch.nn as nn
+
+
+
 
 
 def unbroadcast(grad, shape):
@@ -228,17 +232,61 @@ class Tensor:
     def __rpow__(self, other):
         return Tensor.ensure_tensor(other)**self
 
-    def __rsum__(self, other):
-        return Tensor.ensure_tensor(other).__sum__()
-
     def __neg__(self):
         return self * -1
-    
+
     def __sub__(self, other):
-        return self + (-other)
+        return self + (-Tensor.ensure_tensor(other))
 
     def __rsub__(self, other):
-        return Tensor.ensure_tensor(other).__sub__(self)
+        return Tensor.ensure_tensor(other) + (-self)
+
+
+class MLP:
+    """2-layer MLP: in → hidden (relu) → out. No nn.Module — just Tensors."""
+
+    def __init__(self, n_in, n_hidden, n_out, seed=0):
+        rng = np.random.default_rng(seed)
+        # small init so relu doesn't die immediately
+        self.W1 = Tensor(rng.normal(scale=0.3, size=(n_in, n_hidden)).astype(np.float32), requires_grad=True)
+        self.b1 = Tensor(np.zeros(n_hidden, dtype=np.float32), requires_grad=True)
+        self.W2 = Tensor(rng.normal(scale=0.3, size=(n_hidden, n_out)).astype(np.float32), requires_grad=True)
+        self.b2 = Tensor(np.zeros(n_out, dtype=np.float32), requires_grad=True)
+
+    def parameters(self):
+        return [self.W1, self.b1, self.W2, self.b2]
+
+    def __call__(self, X):
+        h = (X @ self.W1 + self.b1).relu()
+        return h @ self.W2 + self.b2
+
+
+def run_mlp(steps=1000, lr=0.05):
+    """Fit y = 2*x0 - x1 + 0.5. Loss should fall if autograd + SGD work."""
+    rng = np.random.default_rng(0)
+    X_np = rng.normal(size=(64, 2)).astype(np.float32)
+    y_np = (2.0 * X_np[:, 0] - X_np[:, 1] + 0.5).reshape(-1, 1).astype(np.float32)
+
+    model = MLP(2, 8, 1)
+    X = Tensor(X_np)
+    y = Tensor(y_np)
+
+    print("mlp smoke test (MSE should fall)")
+    for step in range(steps):
+        for p in model.parameters():
+            p.zero_grad()
+
+        pred = model(X)
+        loss = ((pred - y) ** 2).mean()
+        loss.backward()
+
+        for p in model.parameters():
+            p.data -= lr * p.grad
+
+        if step % 50 == 0 or step == steps - 1:
+            print(f"  step {step:3d}  loss={float(loss.data):.6f}")
+
+    return float(loss.data)
 
 
 if __name__ == "__main__":
@@ -356,3 +404,7 @@ if __name__ == "__main__":
     A = Tensor([1.0, 2.0, 3.0], requires_grad=True)
     L = (A - 2).sum()
     L.backward()
+    print(L.data, A.grad)
+    print("--------------------------------")
+    run_mlp()
+
